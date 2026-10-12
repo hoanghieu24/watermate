@@ -88,7 +88,7 @@ export async function sendPushSubscription(subscription: PushSubscriptionJSON): 
   return res.json();
 }
 
-export async function sendTestNotification(): Promise<{ success: boolean; message?: string }> {
+export async function sendTestNotification(): Promise<{ success: boolean; message?: string; sent?: number; failed?: number; total?: number }> {
   const res = await fetch(`${API_BASE}/push/test`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

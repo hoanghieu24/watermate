@@ -29,7 +29,7 @@ pushRouter.post('/subscribe', async (req: Request, res: Response) => {
 // POST /api/push/test
 pushRouter.post('/test', async (_req: Request, res: Response) => {
   try {
-    const activeCount = await dbGet<{ count: number | string }>('SELECT COUNT(*) as count FROM push_subscriptions WHERE is_active = 1');
+    const activeCount = await dbGet<{ count: number | string }>('SELECT COUNT(*) as count FROM push_subscriptions WHERE is_active = TRUE');
     const countNumber = Number(activeCount?.count || 0);
 
     if (countNumber === 0) {
@@ -56,7 +56,7 @@ pushRouter.post('/test', async (_req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Error sending test push:', err);
-    res.status(500).json({ error: 'Lỗi máy chủ khi gửi thông báo thử nghiệm' });
+    res.status(500).json({ error: (err as Error)?.message || 'Lỗi máy chủ khi gửi thông báo thử nghiệm' });
   }
 });
 

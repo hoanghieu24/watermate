@@ -21,22 +21,23 @@ export async function saveSubscription(subscription: webpush.PushSubscription) {
   if (existing) {
     await dbRun(`
       UPDATE push_subscriptions
-      SET subscription_json = ?, is_active = 1, updated_at = ?
+      SET subscription_json = ?, is_active = TRUE, updated_at = ?
       WHERE id = ?
     `, [json, now, existing.id]);
     return existing.id;
   } else {
-    const result = await dbRun(`
+    await dbRun(`
       INSERT INTO push_subscriptions (endpoint, subscription_json, is_active, created_at, updated_at)
-      VALUES (?, ?, 1, ?, ?)
+      VALUES (?, ?, TRUE, ?, ?)
     `, [endpoint, json, now, now]);
-    return result.lastInsertRowid;
+    const inserted = await dbGet<{ id: number }>('SELECT id FROM push_subscriptions WHERE endpoint = ?', [endpoint]);
+    return inserted?.id || 1;
   }
 }
 
 export async function sendNotificationToAll(payload: PushPayload): Promise<{ sent: number; failed: number; total: number }> {
   const rows = await dbQuery<{ id: number; endpoint: string; subscription_json: string }>(
-    'SELECT id, endpoint, subscription_json FROM push_subscriptions WHERE is_active = 1'
+    'SELECT id, endpoint, subscription_json FROM push_subscriptions WHERE is_active = TRUE'
   );
 
   if (rows.length === 0) {
@@ -77,7 +78,7 @@ export async function sendNotificationToAll(payload: PushPayload): Promise<{ sen
 
       // 404 or 410 indicates subscription has expired or unsubscribed
       if (statusCode === 404 || statusCode === 410) {
-        await dbRun('UPDATE push_subscriptions SET is_active = 0, updated_at = ? WHERE id = ?', [now, row.id]);
+        await dbRun('UPDATE push_subscriptions SET is_active = FALSE, updated_at = ? WHERE id = ?', [now, row.id]);
         console.log(`Deactivated expired subscription ${row.id}`);
       }
     }

@@ -17,7 +17,7 @@
     >
       <div
         v-if="toast"
-        class="fixed top-16 left-4 right-4 max-w-sm mx-auto z-50 pointer-events-none"
+        class="fixed top-16 left-4 right-4 max-w-sm mx-auto z-[100] pointer-events-none"
       >
         <div
           class="rounded-2xl px-4 py-3 shadow-xl backdrop-blur-md flex items-center justify-between text-xs font-bold border"
@@ -164,7 +164,7 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'succes
     if (toast.value?.message === message) {
       toast.value = null;
     }
-  }, 2500);
+  }, 3500);
 }
 
 // Initial Sync with Backend if available
@@ -324,11 +324,20 @@ async function handleRequestPush() {
 }
 
 async function handleTestPush() {
+  if (!isPushSubscribed.value) {
+    showToast('Vui lòng bấm nút "Kích hoạt Web Push" bên cạnh trước để cấp quyền!', 'info');
+    return;
+  }
+
   try {
-    showToast('Đang yêu cầu gửi thông báo thử nghiệm...', 'info');
+    showToast('Đang gửi thông báo thử nghiệm từ máy chủ...', 'info');
     const result = await api.sendTestNotification();
     if (result.success) {
-      showToast('Đã gửi thông báo thử nghiệm từ máy chủ!', 'success');
+      if (result.sent && result.sent > 0) {
+        showToast(`Đã gửi thông báo đến ${result.sent} thiết bị! Vui lòng kiểm tra màn hình.`, 'success');
+      } else {
+        showToast('Chưa gửi được thông báo. Hãy thử bấm "Kích hoạt Web Push" lại!', 'error');
+      }
     } else {
       showToast(result.message || 'Chưa gửi được thông báo', 'error');
     }
