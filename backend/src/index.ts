@@ -64,6 +64,14 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`💧 WaterMate Server running on http://localhost:${PORT}`);
     console.log(`📊 Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Aiven)' : 'SQLite'}`);
+
+    // Self-ping Render edge proxy every 10 minutes to stay awake 24/7 (does NOT send notification)
+    const externalUrl = process.env.RENDER_EXTERNAL_URL || 'https://watermate.onrender.com';
+    setInterval(() => {
+      fetch(`${externalUrl}/api/health`)
+        .then(() => console.log(`[Keep-Alive] Pinged ${externalUrl}/api/health (staying awake)`))
+        .catch(() => {});
+    }, 10 * 60 * 1000);
   });
 }
 

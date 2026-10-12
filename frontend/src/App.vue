@@ -197,7 +197,38 @@ onMounted(async () => {
       // ignore
     }
   }
+  // Check if opened from notification with ?auto_add_sip=1
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('auto_add_sip') === '1') {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('auto_add_sip');
+      window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.search);
+
+      setTimeout(() => {
+        handleAddSipFromNotification();
+      }, 500);
+    }
+  }
+
+  // Listen for message from Service Worker when app was already open in background
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'AUTO_ADD_SIP') {
+        handleAddSipFromNotification();
+      }
+    });
+  }
 });
+
+// Auto add sip when opening from reminder notification
+async function handleAddSipFromNotification() {
+  const log = addOneSip();
+  if (log) {
+    showToast(`💧 Đã tự động ghi nhận +1 ngụm (+${log.amount_ml} ml) từ thông báo!`, 'success');
+    api.createWaterLog(log).catch(() => {});
+  }
+}
 
 // Quick Handlers
 async function handleAddSip() {

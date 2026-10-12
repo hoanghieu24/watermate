@@ -98,8 +98,8 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
     return false;
   }
 
-  // Check if interval has elapsed since last successful reminder (support 15m minimum)
-  const intervalMinutes = Math.max(15, settings.interval_minutes || 60);
+  // Check if interval has elapsed since last successful reminder (support 10m minimum)
+  const intervalMinutes = Math.max(10, settings.interval_minutes || 60);
   const safetyBufferMs = (intervalMinutes - 2) * 60 * 1000;
 
   const lastSent = await dbGet<{ sent_at: string }>(`
@@ -129,11 +129,11 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
   console.log(`[Scheduler] Triggering reminder at ${currentTimeStr} (${tz})`);
 
   const payload = {
-    title: 'WaterMate - Đến giờ uống nước!',
-    body: settings.notification_message || '💧 Đến giờ uống một ngụm nước mát lành rồi!',
+    title: 'WaterMate - Đến giờ uống nước! 💧',
+    body: settings.notification_message || '💧 Đến giờ uống một ngụm nước rồi! Chạm để cộng 1 ngụm.',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    url: '/',
+    url: '/?auto_add_sip=1',
   };
 
   const result = await sendNotificationToAll(payload);

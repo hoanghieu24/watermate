@@ -52,12 +52,14 @@ self.addEventListener('push', (event) => {
 // Handle notification tap / click
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/';
+  const rawUrl = event.notification.data?.url || '/';
+  const targetUrl = rawUrl.includes('auto_add_sip') ? rawUrl : `${rawUrl}${rawUrl.includes('?') ? '&' : '?'}auto_add_sip=1`;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.postMessage({ type: 'AUTO_ADD_SIP' });
           return client.focus();
         }
       }

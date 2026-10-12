@@ -131,13 +131,13 @@
             <!-- Interval -->
             <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
               <label class="block text-xs font-bold text-slate-700 mb-2">Khoảng cách nhắc</label>
-              <div class="grid grid-cols-5 gap-1.5">
+              <div class="grid grid-cols-6 gap-1">
                 <button
-                  v-for="mins in [15, 30, 45, 60, 90]"
+                  v-for="mins in [10, 15, 30, 45, 60, 90]"
                   :key="mins"
                   type="button"
                   @click="formSettings.interval_minutes = mins"
-                  class="py-2 text-xs font-bold rounded-xl border transition-all"
+                  class="py-2 text-[11px] font-bold rounded-xl border transition-all"
                   :class="formSettings.interval_minutes === mins ? 'bg-sky-500 text-white border-sky-500 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'"
                 >
                   {{ mins }}p

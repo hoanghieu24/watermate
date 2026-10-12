@@ -41,10 +41,10 @@ pushRouter.post('/test', async (_req: Request, res: Response) => {
 
     const payload = {
       title: 'WaterMate - Thông báo thử nghiệm! 💧',
-      body: 'Tuyệt vời! Web Push trên thiết bị của bạn đã hoạt động bình thường kể cả khi đóng ứng dụng.',
+      body: 'Tuyệt vời! Web Push trên thiết bị của bạn đã hoạt động bình thường kể cả khi đóng ứng dụng. Chạm để +1 ngụm!',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      url: '/',
+      url: '/?auto_add_sip=1',
     };
 
     const result = await sendNotificationToAll(payload);
