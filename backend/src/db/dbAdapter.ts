@@ -15,10 +15,17 @@ let sqliteDb: DatabaseSync | null = null;
 
 if (isPostgres) {
   console.log('Connecting to PostgreSQL (Aiven/Cloud)...');
+  // Allow cloud-managed self-signed certificates (Aiven, Render, Neon)
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+  let connStr = process.env.DATABASE_URL || '';
+  // Remove sslmode=require from URL so it doesn't override rejectUnauthorized: false
+  connStr = connStr.replace(/([?&])sslmode=[^&]+(&|$)/, '$1').replace(/[?&]$/, '');
+
   pgPool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: connStr,
     ssl: {
-      rejectUnauthorized: false, // Required for Aiven & cloud-managed DBs
+      rejectUnauthorized: false,
     },
     max: 10,
     idleTimeoutMillis: 30000,
