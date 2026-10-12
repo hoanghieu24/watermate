@@ -191,10 +191,13 @@ onMounted(async () => {
     }
   }
 
-  // Listen for message from Service Worker to refresh logs when push arrives
+  // Listen for message from Service Worker to refresh logs and show in-app banner when push arrives
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data?.type === 'REFRESH_LOGS' || event.data?.type === 'AUTO_ADD_SIP') {
+      if (event.data?.type === 'PUSH_RECEIVED') {
+        showToast(event.data.body || '💧 Đến giờ uống nước rồi!', 'info');
+        refreshBackendLogs();
+      } else if (event.data?.type === 'REFRESH_LOGS' || event.data?.type === 'AUTO_ADD_SIP') {
         refreshBackendLogs();
       }
     });

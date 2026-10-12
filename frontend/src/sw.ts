@@ -40,16 +40,20 @@ self.addEventListener('push', (event) => {
     icon: data.icon || '/icons/icon-192.png',
     badge: data.badge || '/icons/icon-192.png',
     data: { url: data.url || '/' },
-    tag: 'watermate-reminder',
+    tag: `watermate-${Date.now()}`,
     renotify: true,
   };
 
   event.waitUntil(
     self.registration.showNotification(data.title, options).then(() => {
-      // Notify active clients to refresh logs from backend
+      // Notify active clients to show in-app notification if foreground, and refresh logs
       return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
         for (const client of clients) {
-          client.postMessage({ type: 'REFRESH_LOGS' });
+          client.postMessage({
+            type: 'PUSH_RECEIVED',
+            title: data.title,
+            body: data.body,
+          });
         }
       });
     })

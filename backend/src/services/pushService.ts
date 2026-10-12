@@ -55,6 +55,10 @@ export async function sendNotificationToAll(payload: PushPayload, statusType: 's
       await webpush.sendNotification(sub, payloadString, {
         TTL: 60 * 60, // 1 hour time-to-live
         urgency: 'high',
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': 'alert',
+        },
       });
       sent++;
 
