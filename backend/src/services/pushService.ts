@@ -35,7 +35,7 @@ export async function saveSubscription(subscription: webpush.PushSubscription) {
   }
 }
 
-export async function sendNotificationToAll(payload: PushPayload): Promise<{ sent: number; failed: number; total: number }> {
+export async function sendNotificationToAll(payload: PushPayload, statusType: 'sent' | 'test' = 'sent'): Promise<{ sent: number; failed: number; total: number }> {
   const rows = await dbQuery<{ id: number; endpoint: string; subscription_json: string }>(
     'SELECT id, endpoint, subscription_json FROM push_subscriptions WHERE is_active = TRUE'
   );
@@ -61,8 +61,8 @@ export async function sendNotificationToAll(payload: PushPayload): Promise<{ sen
       // Log success
       await dbRun(`
         INSERT INTO notification_logs (scheduled_at, sent_at, status, error_message)
-        VALUES (?, ?, 'sent', NULL)
-      `, [now, now]);
+        VALUES (?, ?, ?, NULL)
+      `, [now, now, statusType]);
     } catch (err: unknown) {
       failed++;
       const statusCode = (err as { statusCode?: number })?.statusCode;

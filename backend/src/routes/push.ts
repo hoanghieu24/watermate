@@ -63,7 +63,7 @@ pushRouter.post('/test', async (_req: Request, res: Response) => {
       url: '/?refresh=1',
     };
 
-    const result = await sendNotificationToAll(payload);
+    const result = await sendNotificationToAll(payload, 'test');
     res.json({
       success: true,
       sent: result.sent,

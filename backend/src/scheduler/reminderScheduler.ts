@@ -98,10 +98,16 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
     return false;
   }
 
-  // Check if interval has elapsed since last successful reminder (support 10m minimum)
+  // Check interval alignment: (currentTotalMinutes - startTotalMinutes) % intervalMinutes === 0
   const intervalMinutes = Math.max(10, settings.interval_minutes || 60);
-  const safetyBufferMs = (intervalMinutes - 2) * 60 * 1000;
+  const minutesSinceStart = currentTotalMinutes - startTotalMinutes;
+  const isIntervalTick = minutesSinceStart >= 0 && (minutesSinceStart % intervalMinutes === 0);
 
+  if (!isIntervalTick) {
+    return false;
+  }
+
+  // Prevent duplicate reminders within the same minute (since cron runs every minute)
   const lastSent = await dbGet<{ sent_at: string }>(`
     SELECT sent_at FROM notification_logs
     WHERE status = 'sent'
@@ -112,18 +118,10 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
   if (lastSent && lastSent.sent_at) {
     const lastSentTime = new Date(lastSent.sent_at).getTime();
     const elapsedMs = now.getTime() - lastSentTime;
-    if (elapsedMs < safetyBufferMs) {
-      // Too soon since last reminder, skip
+    if (elapsedMs < 60 * 1000) {
+      // Already sent in this minute, skip duplicate
       return false;
     }
-  }
-
-  // Also check if alignment to interval: (currentTotalMinutes - startTotalMinutes) % intervalMinutes === 0
-  const minutesSinceStart = currentTotalMinutes - startTotalMinutes;
-  const isIntervalTick = minutesSinceStart >= 0 && (minutesSinceStart % intervalMinutes === 0);
-
-  if (!isIntervalTick && lastSent) {
-    return false;
   }
 
   console.log(`[Scheduler] Triggering reminder at ${currentTimeStr} (${tz})`);
