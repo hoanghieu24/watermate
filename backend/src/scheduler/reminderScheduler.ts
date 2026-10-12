@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { dbGet } from '../db/database.js';
+import { dbGet, dbRun } from '../db/database.js';
 import { sendNotificationToAll } from '../services/pushService.js';
 
 interface ReminderSettingsRow {
@@ -128,12 +128,28 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
 
   console.log(`[Scheduler] Triggering reminder at ${currentTimeStr} (${tz})`);
 
+  // Auto record +1 sip (50ml) in database for this reminder!
+  const nowIso = now.toISOString();
+  const dateStr = nowIso.substring(0, 10);
+  const logId = `reminder_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const sipMl = 50;
+
+  try {
+    await dbRun(`
+      INSERT INTO water_logs (id, amount_ml, sip_equivalent, source, created_at, local_date)
+      VALUES (?, ?, ?, 'reminder', ?, ?)
+    `, [logId, sipMl, 1.0, nowIso, dateStr]);
+    console.log(`[Scheduler] Auto-recorded +1 sip (${sipMl}ml) into water_logs for ${dateStr}`);
+  } catch (logErr) {
+    console.error('[Scheduler] Error auto-recording sip:', logErr);
+  }
+
   const payload = {
     title: 'WaterMate - Đến giờ uống nước! 💧',
-    body: settings.notification_message || '💧 Đến giờ uống một ngụm nước rồi! Chạm để cộng 1 ngụm.',
+    body: settings.notification_message || `💧 Đã tự động cộng +1 ngụm (${sipMl}ml)! Uống một ngụm nước nhé.`,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    url: '/?auto_add_sip=1',
+    url: '/?refresh=1',
   };
 
   const result = await sendNotificationToAll(payload);

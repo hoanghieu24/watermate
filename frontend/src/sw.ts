@@ -45,21 +45,27 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title, options).then(() => {
+      // Notify active clients to refresh logs from backend
+      return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        for (const client of clients) {
+          client.postMessage({ type: 'REFRESH_LOGS' });
+        }
+      });
+    })
   );
 });
 
 // Handle notification tap / click
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const rawUrl = event.notification.data?.url || '/';
-  const targetUrl = rawUrl.includes('auto_add_sip') ? rawUrl : `${rawUrl}${rawUrl.includes('?') ? '&' : '?'}auto_add_sip=1`;
+  const targetUrl = event.notification.data?.url || '/';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.postMessage({ type: 'AUTO_ADD_SIP' });
+          client.postMessage({ type: 'REFRESH_LOGS' });
           return client.focus();
         }
       }

@@ -14,3 +14,4 @@ jobs:
         run: |
           echo "Pinging WaterMate Backend health endpoint..."
           curl -s -f -m 30 https://watermate.onrender.com/api/health || echo "Ping failed, will retry next run"
+

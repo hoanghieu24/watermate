@@ -169,14 +169,7 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'succes
 
 // Initial Sync with Backend if available
 onMounted(async () => {
-  try {
-    const backendLogs = await api.fetchWaterLogs();
-    if (backendLogs && Array.isArray(backendLogs) && backendLogs.length > 0) {
-      syncBackendLogs(backendLogs);
-    }
-  } catch {
-    // If backend isn't ready or offline, localStorage handles it seamlessly
-  }
+  await refreshBackendLogs();
 
   try {
     const remoteSettings = await api.fetchReminderSettings();
@@ -197,36 +190,38 @@ onMounted(async () => {
       // ignore
     }
   }
-  // Check if opened from notification with ?auto_add_sip=1
-  if (typeof window !== 'undefined') {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('auto_add_sip') === '1') {
-      const cleanUrl = new URL(window.location.href);
-      cleanUrl.searchParams.delete('auto_add_sip');
-      window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.search);
 
-      setTimeout(() => {
-        handleAddSipFromNotification();
-      }, 500);
-    }
-  }
-
-  // Listen for message from Service Worker when app was already open in background
+  // Listen for message from Service Worker to refresh logs when push arrives
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data?.type === 'AUTO_ADD_SIP') {
-        handleAddSipFromNotification();
+      if (event.data?.type === 'REFRESH_LOGS' || event.data?.type === 'AUTO_ADD_SIP') {
+        refreshBackendLogs();
       }
+    });
+  }
+
+  // Auto refresh logs whenever the app is brought to foreground (unlock screen / switch app)
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshBackendLogs();
+      }
+    });
+    window.addEventListener('focus', () => {
+      refreshBackendLogs();
     });
   }
 });
 
-// Auto add sip when opening from reminder notification
-async function handleAddSipFromNotification() {
-  const log = addOneSip();
-  if (log) {
-    showToast(`💧 Đã tự động ghi nhận +1 ngụm (+${log.amount_ml} ml) từ thông báo!`, 'success');
-    api.createWaterLog(log).catch(() => {});
+// Re-fetch backend logs and update state
+async function refreshBackendLogs() {
+  try {
+    const backendLogs = await api.fetchWaterLogs();
+    if (backendLogs && Array.isArray(backendLogs)) {
+      syncBackendLogs(backendLogs);
+    }
+  } catch {
+    // offline fallback
   }
 }
 
@@ -364,10 +359,11 @@ async function handleTestPush() {
     showToast('Đang gửi thông báo thử nghiệm từ máy chủ...', 'info');
     const result = await api.sendTestNotification();
     if (result.success) {
+      await refreshBackendLogs();
       if (result.sent && result.sent > 0) {
-        showToast(`Đã gửi thông báo đến ${result.sent} thiết bị! Vui lòng kiểm tra màn hình.`, 'success');
+        showToast(`Đã gửi thông báo & tự động cộng +1 ngụm (+50ml)!`, 'success');
       } else {
-        showToast('Chưa gửi được thông báo. Hãy thử bấm "Kích hoạt Web Push" lại!', 'error');
+        showToast('Đã ghi nhận +1 ngụm! (Chưa có máy nào đăng ký push)', 'info');
       }
     } else {
       showToast(result.message || 'Chưa gửi được thông báo', 'error');
