@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+    <linearGradient id="drop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#bae6fd"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#082f49" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <!-- Background rounded squircle (iOS icon standard) -->
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  
+  <!-- Subtle circular accent -->
+  <circle cx="256" cy="270" r="160" fill="#ffffff" opacity="0.08"/>
+
+  <!-- Water Droplet with Drop Shadow -->
+  <path filter="url(#shadow)" d="M256 96 C256 96 144 240 144 320 C144 381.85 194.15 432 256 432 C317.85 432 368 381.85 368 320 C368 240 256 96 256 96 Z" fill="url(#drop)"/>
+  
+  <!-- Gloss highlight reflection -->
+  <path d="M220 220 C200 250 190 285 190 320 C190 330 192 340 196 350 C190 340 186 325 186 310 C186 265 204 235 220 220 Z" fill="#ffffff" opacity="0.6"/>
+  <circle cx="295" cy="340" r="14" fill="#ffffff" opacity="0.4"/>
+</svg>

@@ -1,0 +1,23 @@
+{
+  "name": "watermate",
+  "version": "1.0.0",
+  "description": "WaterMate - App theo dõi và nhắc uống nước PWA",
+  "scripts": {
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
+    "build": "npm run build:frontend && npm run build:backend",
+    "start": "npm --prefix backend run start",
+    "test": "npm --prefix backend test"
+  },
+  "keywords": [
+    "pwa",
+    "vue3",
+    "water-tracker",
+    "web-push",
+    "ios-pwa"
+  ],
+  "author": "",
+  "license": "MIT"
+}
