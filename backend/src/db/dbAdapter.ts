@@ -127,6 +127,19 @@ export async function initDb(): Promise<void> {
         status VARCHAR(20) NOT NULL,
         error_message TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS event_reminders (
+        id VARCHAR(100) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        event_date VARCHAR(20) NOT NULL,
+        event_time VARCHAR(10) NOT NULL DEFAULT '09:00',
+        remind_days VARCHAR(50) NOT NULL DEFAULT '3,2,1,0',
+        is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL,
+        last_notified_date VARCHAR(20)
+      );
+      CREATE INDEX IF NOT EXISTS idx_event_date ON event_reminders(event_date);
     `);
 
     // Ensure default settings row
@@ -199,6 +212,19 @@ export async function initDb(): Promise<void> {
         status TEXT NOT NULL,
         error_message TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS event_reminders (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        event_date TEXT NOT NULL,
+        event_time TEXT NOT NULL DEFAULT '09:00',
+        remind_days TEXT NOT NULL DEFAULT '3,2,1,0',
+        is_completed INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        last_notified_date TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_event_date ON event_reminders(event_date);
     `);
 
     console.log('SQLite database initialized successfully.');

@@ -18,6 +18,20 @@
     <!-- Actions -->
     <div class="flex items-center gap-2">
       <button
+        @click="$emit('open-events')"
+        aria-label="Lịch nhắc sự kiện"
+        class="w-9 h-9 rounded-full bg-slate-100 hover:bg-purple-50 active:scale-95 text-slate-600 hover:text-purple-600 flex items-center justify-center transition-all relative"
+      >
+        <CalendarDays class="w-4 h-4" />
+        <span
+          v-if="eventsCount && eventsCount > 0"
+          class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-purple-600 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-sm"
+        >
+          {{ eventsCount }}
+        </span>
+      </button>
+
+      <button
         @click="$emit('open-stats')"
         aria-label="Thống kê"
         class="w-9 h-9 rounded-full bg-slate-100 hover:bg-sky-50 active:scale-95 text-slate-600 hover:text-sky-600 flex items-center justify-center transition-all"
@@ -38,10 +52,15 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Droplets, BarChart3, Settings } from 'lucide-vue-next';
+import { Droplets, BarChart3, Settings, CalendarDays } from 'lucide-vue-next';
 import { formatReadableDate, getTodayLocalDate } from '../utils/date';
 
+defineProps<{
+  eventsCount?: number;
+}>();
+
 defineEmits<{
+  (e: 'open-events'): void;
   (e: 'open-stats'): void;
   (e: 'open-settings'): void;
 }>();

@@ -35,3 +35,15 @@ export interface DaySummary {
   log_count: number;
   percentage: number;
 }
+
+export interface EventReminder {
+  id: string;
+  title: string;
+  description?: string;
+  event_date: string; // YYYY-MM-DD
+  event_time: string; // HH:mm, default "09:00"
+  remind_days: string; // e.g. "3,2,1,0"
+  is_completed: boolean;
+  created_at: string;
+  last_notified_date?: string | null;
+}

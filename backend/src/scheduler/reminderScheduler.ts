@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { dbGet, dbRun } from '../db/database.js';
+import { dbGet, dbRun, dbQuery } from '../db/database.js';
 import { sendNotificationToAll } from '../services/pushService.js';
 
 interface ReminderSettingsRow {
@@ -19,12 +19,18 @@ interface ReminderSettingsRow {
 export function startReminderScheduler() {
   console.log('Starting WaterMate Reminder Scheduler (node-cron)...');
 
-  // Run every minute: check if it's time to trigger a reminder
+  // Run every minute: check if it's time to trigger water and event reminders
   cron.schedule('* * * * *', async () => {
     try {
       await evaluateAndSendReminder();
     } catch (err) {
-      console.error('Error during scheduler evaluation:', err);
+      console.error('Error during water reminder evaluation:', err);
+    }
+
+    try {
+      await evaluateEventReminders();
+    } catch (err) {
+      console.error('Error during event reminder evaluation:', err);
     }
   });
 }
@@ -153,4 +159,108 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
   const result = await sendNotificationToAll(payload);
   console.log(`[Scheduler] Reminder sent: ${result.sent} succeeded, ${result.failed} failed out of ${result.total} devices.`);
   return result.sent > 0;
+}
+
+export async function evaluateEventReminders(): Promise<void> {
+  const now = new Date();
+  const tz = 'Asia/Ho_Chi_Minh';
+
+  // Format today's date in YYYY-MM-DD
+  const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const todayStr = dateFormatter.format(now); // "YYYY-MM-DD"
+
+  // Format current time in HH:mm
+  const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const currentTimeStr = timeFormatter.format(now); // "HH:mm"
+
+  // Fetch active incomplete events that haven't been notified today
+  const events = await dbQuery<{
+    id: string;
+    title: string;
+    description: string;
+    event_date: string;
+    event_time: string;
+    remind_days: string;
+    is_completed: boolean | number;
+    last_notified_date: string | null;
+  }>(`
+    SELECT * FROM event_reminders
+    WHERE (is_completed = FALSE OR is_completed = 0)
+      AND (last_notified_date IS NULL OR last_notified_date != ?)
+  `, [todayStr]);
+
+  if (!events || events.length === 0) {
+    return;
+  }
+
+  const [tY, tM, tD] = todayStr.split('-').map(Number);
+  const todayUtc = Date.UTC(tY, tM - 1, tD);
+
+  for (const event of events) {
+    if (!event.event_date) continue;
+
+    const [eY, eM, eD] = event.event_date.split('-').map(Number);
+    const eventUtc = Date.UTC(eY, eM - 1, eD);
+    const diffDays = Math.round((eventUtc - todayUtc) / (1000 * 60 * 60 * 24));
+
+    // If event has already passed
+    if (diffDays < 0) {
+      continue;
+    }
+
+    // Check target reminder time (default 09:00)
+    const targetTime = event.event_time || '09:00';
+    if (currentTimeStr < targetTime) {
+      // Haven't reached the reminder time yet today
+      continue;
+    }
+
+    // Parse configured remind days, e.g. "3,2,1,0" -> [3, 2, 1, 0]
+    const remindDays = (event.remind_days || '3,2,1,0')
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => !isNaN(n));
+
+    // Check if diffDays matches configured schedule
+    if (remindDays.includes(diffDays)) {
+      let title = '';
+      let body = '';
+
+      if (diffDays === 0) {
+        title = `🎯 Hôm nay: ${event.title}!`;
+        body = event.description ? `${event.description}` : `Sự kiện diễn ra hôm nay. Đừng quên nhé!`;
+      } else if (diffDays === 1) {
+        title = `⏳ Ngày mai: ${event.title}!`;
+        body = event.description ? `Còn 1 ngày: ${event.description}` : `Sự kiện sẽ diễn ra vào ngày mai (${event.event_date})!`;
+      } else {
+        title = `📅 Còn ${diffDays} ngày: ${event.title}`;
+        body = event.description ? `Sắp đến: ${event.description}` : `Sự kiện diễn ra vào ${event.event_date}. Chuẩn bị nhé!`;
+      }
+
+      console.log(`[EventScheduler] Sending event reminder: "${title}" (diffDays: ${diffDays})`);
+
+      const payload = {
+        title,
+        body,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        url: '/?tab=events',
+      };
+
+      await sendNotificationToAll(payload, 'event');
+
+      // Mark event as notified for today
+      await dbRun('UPDATE event_reminders SET last_notified_date = ? WHERE id = ?', [todayStr, event.id]);
+    }
+  }
 }

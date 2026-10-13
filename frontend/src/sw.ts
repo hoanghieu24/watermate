@@ -49,10 +49,12 @@ self.addEventListener('push', (event) => {
       // Notify active clients to show in-app notification if foreground, and refresh logs
       return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
         for (const client of clients) {
+          const isEvent = data.url && data.url.includes('tab=events');
           client.postMessage({
-            type: 'PUSH_RECEIVED',
+            type: isEvent ? 'EVENT_PUSH_RECEIVED' : 'PUSH_RECEIVED',
             title: data.title,
             body: data.body,
+            url: data.url,
           });
         }
       });
@@ -69,7 +71,10 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.postMessage({ type: 'REFRESH_LOGS' });
+          client.postMessage({ type: 'REFRESH_LOGS', url: targetUrl });
+          if (targetUrl.includes('tab=events')) {
+            client.postMessage({ type: 'OPEN_TAB', tab: 'events' });
+          }
           return client.focus();
         }
       }

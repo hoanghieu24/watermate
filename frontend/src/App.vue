@@ -2,6 +2,8 @@
   <div class="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto shadow-2xl relative select-none">
     <!-- Header -->
     <HeaderBar
+      :events-count="upcomingEventsCount"
+      @open-events="showEventsModal = true"
       @open-stats="showStatsModal = true"
       @open-settings="showSettingsModal = true"
     />
@@ -75,6 +77,15 @@
     </footer>
 
     <!-- Modals -->
+    <EventRemindersModal
+      v-if="showEventsModal"
+      :events="eventReminders"
+      @close="showEventsModal = false"
+      @save-event="handleSaveEvent"
+      @toggle-completed="handleToggleEvent"
+      @delete-event="handleDeleteEvent"
+    />
+
     <CustomWaterModal
       v-if="showCustomModal"
       :sip-ml="preferences.sip_ml"
@@ -105,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import HeaderBar from './components/HeaderBar.vue';
 import ProgressCard from './components/ProgressCard.vue';
 import QuickActions from './components/QuickActions.vue';
@@ -113,11 +124,12 @@ import HistoryList from './components/HistoryList.vue';
 import CustomWaterModal from './components/CustomWaterModal.vue';
 import StatsModal from './components/StatsModal.vue';
 import SettingsModal from './components/SettingsModal.vue';
+import EventRemindersModal from './components/EventRemindersModal.vue';
 import IosInstallBanner from './components/IosInstallBanner.vue';
 
 import { useWaterTracker } from './composables/useWaterTracker';
 import { useReminder } from './composables/useReminder';
-import type { UserPreferences, ReminderSettings } from './types';
+import type { UserPreferences, ReminderSettings, EventReminder } from './types';
 import * as api from './services/api';
 
 const {
@@ -156,7 +168,19 @@ const {
 const showCustomModal = ref(false);
 const showStatsModal = ref(false);
 const showSettingsModal = ref(false);
+const showEventsModal = ref(false);
+const eventReminders = ref<EventReminder[]>([]);
 const toast = ref<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+// Active countdown count for header badge
+const upcomingEventsCount = computed(() => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${y}-${m}-${d}`;
+  return eventReminders.value.filter((e) => !e.is_completed && e.event_date >= todayStr).length;
+});
 
 function showToast(message: string, type: 'success' | 'error' | 'info' = 'success') {
   toast.value = { type, message };
@@ -169,7 +193,20 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'succes
 
 // Initial Sync with Backend if available
 onMounted(async () => {
-  await refreshBackendLogs();
+  await Promise.allSettled([
+    refreshBackendLogs(),
+    refreshEventReminders(),
+  ]);
+
+  // Check URL query parameter (e.g. from push click ?tab=events)
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('tab') === 'events') {
+      showEventsModal.value = true;
+    }
+  } catch {
+    // ignore
+  }
 
   try {
     const remoteSettings = await api.fetchReminderSettings();
@@ -197,8 +234,15 @@ onMounted(async () => {
       if (event.data?.type === 'PUSH_RECEIVED') {
         showToast(event.data.body || '💧 Đến giờ uống nước rồi!', 'info');
         refreshBackendLogs();
+      } else if (event.data?.type === 'EVENT_PUSH_RECEIVED') {
+        showToast(event.data.body || '📅 Bạn có sự kiện cần lưu ý!', 'info');
+        refreshEventReminders();
+      } else if (event.data?.type === 'OPEN_TAB' && event.data?.tab === 'events') {
+        showEventsModal.value = true;
+        refreshEventReminders();
       } else if (event.data?.type === 'REFRESH_LOGS' || event.data?.type === 'AUTO_ADD_SIP') {
         refreshBackendLogs();
+        refreshEventReminders();
       }
     });
   }
@@ -208,10 +252,12 @@ onMounted(async () => {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         refreshBackendLogs();
+        refreshEventReminders();
       }
     });
     window.addEventListener('focus', () => {
       refreshBackendLogs();
+      refreshEventReminders();
     });
   }
 });
@@ -373,6 +419,65 @@ async function handleTestPush() {
     }
   } catch (err: unknown) {
     showToast((err as Error)?.message || 'Lỗi gửi test push', 'error');
+  }
+}
+
+// Event Reminders Handlers
+async function refreshEventReminders() {
+  try {
+    const list = await api.fetchEventReminders();
+    if (Array.isArray(list)) {
+      eventReminders.value = list;
+    }
+  } catch {
+    // offline fallback
+  }
+}
+
+async function handleSaveEvent(data: {
+  id?: string;
+  title: string;
+  description?: string;
+  event_date: string;
+  event_time: string;
+  remind_days: string;
+}) {
+  try {
+    if (data.id) {
+      await api.updateEventReminder(data.id, data);
+      showToast('Đã cập nhật sự kiện!', 'success');
+    } else {
+      await api.createEventReminder({
+        title: data.title,
+        description: data.description,
+        event_date: data.event_date,
+        event_time: data.event_time,
+        remind_days: data.remind_days,
+      });
+      showToast('Đã tạo lịch nhắc sự kiện!', 'success');
+    }
+    await refreshEventReminders();
+  } catch (err: unknown) {
+    showToast((err as Error)?.message || 'Lỗi khi lưu sự kiện', 'error');
+  }
+}
+
+async function handleToggleEvent(id: string) {
+  try {
+    await api.toggleEventReminder(id);
+    await refreshEventReminders();
+  } catch (err: unknown) {
+    showToast((err as Error)?.message || 'Lỗi khi cập nhật trạng thái', 'error');
+  }
+}
+
+async function handleDeleteEvent(id: string) {
+  try {
+    await api.deleteEventReminder(id);
+    await refreshEventReminders();
+    showToast('Đã xóa sự kiện', 'info');
+  } catch (err: unknown) {
+    showToast((err as Error)?.message || 'Lỗi khi xóa sự kiện', 'error');
   }
 }
 </script>

@@ -1,4 +1,4 @@
-import type { WaterLog, ReminderSettings } from '../types';
+import type { WaterLog, ReminderSettings, EventReminder } from '../types';
 
 // In production on Vercel, points to Render backend via VITE_API_URL; locally proxies via /api
 const envBase = (import.meta.env.VITE_API_URL as string) || '';
@@ -99,4 +99,60 @@ export async function sendTestNotification(): Promise<{ success: boolean; messag
   }
   return res.json();
 }
+
+// Event Reminders API
+export async function fetchEventReminders(): Promise<EventReminder[]> {
+  const res = await fetch(`${API_BASE}/event-reminders`);
+  if (!res.ok) throw new Error('Không thể tải danh sách sự kiện');
+  return res.json();
+}
+
+export async function createEventReminder(data: {
+  title: string;
+  description?: string;
+  event_date: string;
+  event_time?: string;
+  remind_days?: string;
+}): Promise<EventReminder> {
+  const res = await fetch(`${API_BASE}/event-reminders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Lỗi khi tạo sự kiện');
+  }
+  return res.json();
+}
+
+export async function updateEventReminder(id: string, data: Partial<EventReminder>): Promise<EventReminder> {
+  const res = await fetch(`${API_BASE}/event-reminders/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Lỗi khi cập nhật sự kiện');
+  }
+  return res.json();
+}
+
+export async function toggleEventReminder(id: string): Promise<{ success: boolean; is_completed: boolean }> {
+  const res = await fetch(`${API_BASE}/event-reminders/${id}/toggle`, {
+    method: 'PATCH',
+  });
+  if (!res.ok) throw new Error('Lỗi khi đổi trạng thái sự kiện');
+  return res.json();
+}
+
+export async function deleteEventReminder(id: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/event-reminders/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Lỗi khi xóa sự kiện');
+  return true;
+}
+
 
