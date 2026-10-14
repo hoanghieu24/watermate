@@ -273,6 +273,46 @@ export async function initDb(): Promise<void> {
     try { sqliteDb.exec('ALTER TABLE event_reminders ADD COLUMN user_id TEXT;'); } catch {}
     try { sqliteDb.exec('ALTER TABLE push_subscriptions ADD COLUMN user_id TEXT;'); } catch {}
 
+    // Remove legacy CHECK (id = 1) in SQLite reminder_settings if present
+    try {
+      const tableInfo = sqliteDb.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='reminder_settings'").get() as { sql?: string } | undefined;
+      if (tableInfo?.sql && tableInfo.sql.includes('CHECK (id = 1)')) {
+        sqliteDb.exec(`
+          CREATE TABLE reminder_settings_temp AS SELECT * FROM reminder_settings;
+          DROP TABLE reminder_settings;
+          CREATE TABLE reminder_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enabled INTEGER DEFAULT 1,
+            water_enabled INTEGER DEFAULT 1,
+            event_enabled INTEGER DEFAULT 1,
+            event_auto_delete INTEGER DEFAULT 1,
+            trash_enabled INTEGER DEFAULT 0,
+            trash_mode TEXT DEFAULT 'days_of_month',
+            trash_interval_days INTEGER DEFAULT 1,
+            trash_start_date TEXT,
+            trash_days TEXT DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+            trash_time TEXT DEFAULT '19:00',
+            trash_message TEXT DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+            last_trash_notified_date TEXT,
+            user_id TEXT,
+            start_time TEXT DEFAULT '08:00',
+            end_time TEXT DEFAULT '22:00',
+            interval_minutes INTEGER DEFAULT 60,
+            timezone TEXT DEFAULT 'Asia/Ho_Chi_Minh',
+            notification_message TEXT DEFAULT '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
+            paused_until TEXT,
+            quiet_hours_enabled INTEGER DEFAULT 0,
+            quiet_start_time TEXT DEFAULT '12:00',
+            quiet_end_time TEXT DEFAULT '13:30'
+          );
+          INSERT INTO reminder_settings SELECT * FROM reminder_settings_temp;
+          DROP TABLE reminder_settings_temp;
+        `);
+      }
+    } catch (migErr) {
+      console.warn('SQLite legacy check migration error:', migErr);
+    }
+
     // 3. Create Indexes after columns exist
     try { sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);'); } catch {}
     try { sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_water_logs_date ON water_logs(local_date);'); } catch {}
@@ -282,49 +322,70 @@ export async function initDb(): Promise<void> {
     try { sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_event_date ON event_reminders(event_date);'); } catch {}
     try { sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_event_user ON event_reminders(user_id);'); } catch {}
 
-    const settingsRow = sqliteDb.prepare('SELECT id FROM reminder_settings WHERE id = 1').get();
-    if (!settingsRow) {
-      sqliteDb.prepare(`
-        INSERT INTO reminder_settings (id, enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled, trash_days, trash_time, trash_message, start_time, end_time, interval_minutes, timezone, notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time)
-        VALUES (1, 1, 1, 1, 1, 0, '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', '19:00', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.', '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh', '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', 0, '12:00', '13:30')
-      `).run();
+    console.log('SQLite database initialized successfully.');
+  }
+
+  // Guarantee primary user 'hieu' exists and own all legacy/unassigned data (making it private)
+  try {
+    let hieu = await dbGet<{ id: string }>('SELECT id FROM users WHERE username = ?', ['hieu']);
+    if (!hieu) {
+      const crypto = await import('crypto');
+      const salt = crypto.randomBytes(16).toString('hex');
+      const passwordHash = crypto.pbkdf2Sync('123456', salt, 100000, 64, 'sha512').toString('hex');
+      const userId = `usr_hieu_${Date.now()}`;
+      await dbRun(
+        'INSERT INTO users (id, username, password_hash, salt, created_at) VALUES (?, ?, ?, ?, ?)',
+        [userId, 'hieu', passwordHash, salt, new Date().toISOString()]
+      );
+      hieu = { id: userId };
     }
 
-    sqliteDb.exec(`
-      CREATE TABLE IF NOT EXISTS push_subscriptions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        endpoint TEXT UNIQUE NOT NULL,
-        subscription_json TEXT NOT NULL,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        user_id TEXT
-      );
-      CREATE INDEX IF NOT EXISTS idx_push_endpoint ON push_subscriptions(endpoint);
+    if (hieu?.id) {
+      const hieuId = hieu.id;
+      // 1. Move all unassigned water logs to hieu
+      await dbRun("UPDATE water_logs SET user_id = ? WHERE user_id IS NULL OR user_id = ''", [hieuId]);
 
-      CREATE TABLE IF NOT EXISTS notification_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        scheduled_at TEXT NOT NULL,
-        sent_at TEXT,
-        status TEXT NOT NULL,
-        error_message TEXT
-      );
+      // 2. Move all unassigned event reminders to hieu
+      await dbRun("UPDATE event_reminders SET user_id = ? WHERE user_id IS NULL OR user_id = ''", [hieuId]);
 
-      CREATE TABLE IF NOT EXISTS event_reminders (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT,
-        event_date TEXT NOT NULL,
-        event_time TEXT NOT NULL DEFAULT '09:00',
-        remind_days TEXT NOT NULL DEFAULT '3,2,1,0',
-        is_completed INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        last_notified_date TEXT,
-        user_id TEXT
-      );
-      CREATE INDEX IF NOT EXISTS idx_event_date ON event_reminders(event_date);
-    `);
+      // 3. Move all push subscriptions to hieu
+      await dbRun("UPDATE push_subscriptions SET user_id = ? WHERE user_id IS NULL OR user_id = ''", [hieuId]);
 
-    console.log('SQLite database initialized successfully.');
+      // 4. Ensure settings for hieu exist
+      const hieuSettings = await dbGet('SELECT id FROM reminder_settings WHERE user_id = ?', [hieuId]);
+      if (!hieuSettings) {
+        const s1 = await dbGet<any>('SELECT * FROM reminder_settings WHERE id = 1');
+        if (s1) {
+          await dbRun(`
+            INSERT INTO reminder_settings (
+              enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled,
+              trash_days, trash_mode, trash_interval_days, trash_start_date, trash_time,
+              trash_message, user_id, start_time, end_time, interval_minutes, timezone,
+              notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            s1.enabled ? 1 : 0, s1.water_enabled ? 1 : 0, s1.event_enabled ? 1 : 0, s1.event_auto_delete ? 1 : 0,
+            s1.trash_enabled ? 1 : 0, s1.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+            s1.trash_mode || 'days_of_month', s1.trash_interval_days || 1, s1.trash_start_date || '2026-01-01',
+            s1.trash_time || '19:00', s1.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+            hieuId, s1.start_time || '08:00', s1.end_time || '22:00', s1.interval_minutes || 60,
+            s1.timezone || 'Asia/Ho_Chi_Minh', '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
+            s1.quiet_hours_enabled ? 1 : 0, s1.quiet_start_time || '12:00', s1.quiet_end_time || '13:30'
+          ]);
+        }
+      }
+
+      // 5. Clean default template for guests / other users (id = 1)
+      await dbRun(`
+        UPDATE reminder_settings
+        SET notification_message = '💧 Bạn ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
+            user_id = NULL
+        WHERE id = 1
+      `);
+      console.log(`[Data Privacy] All legacy data successfully moved to private account 'hieu' (${hieuId}).`);
+    }
+  } catch (privErr) {
+    console.warn('Private data migration error:', privErr);
   }
 }

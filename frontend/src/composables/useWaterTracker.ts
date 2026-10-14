@@ -285,6 +285,13 @@ export function useWaterTracker() {
     syncBackendLogs: (backendLogs: WaterLog[]) => {
       logs.value = backendLogs;
       saveToStorage();
+    },
+    clearAllData: () => {
+      logs.value = [];
+      try {
+        localStorage.removeItem(STORAGE_KEYS.LOGS);
+        localStorage.removeItem(STORAGE_KEYS.LAST_UNDO);
+      } catch {}
     }
   };
 }

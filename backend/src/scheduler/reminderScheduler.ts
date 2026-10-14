@@ -76,7 +76,8 @@ export function isTimeInQuietHours(currentTotalMinutes: number, quietStart: stri
 
 // 1. Water Reminder (Tắt bật thông báo uống nước)
 export async function evaluateAndSendReminder(): Promise<boolean> {
-  const settings = await dbGet<ReminderSettingsRow>('SELECT * FROM reminder_settings WHERE id = 1');
+  const settings = (await dbGet<ReminderSettingsRow>('SELECT * FROM reminder_settings WHERE user_id IS NOT NULL ORDER BY id DESC LIMIT 1')) ||
+                   (await dbGet<ReminderSettingsRow>('SELECT * FROM reminder_settings WHERE id = 1'));
   if (!settings) return false;
 
   // Check water reminder toggle
@@ -162,10 +163,10 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
 
   try {
     await dbRun(`
-      INSERT INTO water_logs (id, amount_ml, sip_equivalent, source, created_at, local_date)
-      VALUES (?, ?, ?, 'reminder', ?, ?)
-    `, [logId, sipMl, 1.0, nowIso, dateStr]);
-    console.log(`[Scheduler] Auto-recorded +1 sip (${sipMl}ml) into water_logs for ${dateStr}`);
+      INSERT INTO water_logs (id, amount_ml, sip_equivalent, source, created_at, local_date, user_id)
+      VALUES (?, ?, ?, 'reminder', ?, ?, ?)
+    `, [logId, sipMl, 1.0, nowIso, dateStr, settings.user_id || null]);
+    console.log(`[Scheduler] Auto-recorded +1 sip (${sipMl}ml) into water_logs for ${dateStr} (user: ${settings.user_id || 'guest'})`);
   } catch (logErr) {
     console.error('[Scheduler] Error auto-recording sip:', logErr);
   }
@@ -185,7 +186,8 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
 
 // 2. Event Reminder (Tắt bật thông báo nhắc nhở lịch & khi nào xong tự xoá)
 export async function evaluateEventReminders(): Promise<void> {
-  const globalSettings = await dbGet<ReminderSettingsRow>('SELECT event_enabled, event_auto_delete FROM reminder_settings WHERE id = 1');
+  const globalSettings = (await dbGet<ReminderSettingsRow>('SELECT event_enabled, event_auto_delete, user_id FROM reminder_settings WHERE user_id IS NOT NULL ORDER BY id DESC LIMIT 1')) ||
+                         (await dbGet<ReminderSettingsRow>('SELECT event_enabled, event_auto_delete, user_id FROM reminder_settings WHERE id = 1'));
   const isEventEnabled = globalSettings?.event_enabled !== undefined ? Boolean(globalSettings.event_enabled) : true;
   const isAutoDelete = globalSettings?.event_auto_delete !== undefined ? Boolean(globalSettings.event_auto_delete) : true;
 

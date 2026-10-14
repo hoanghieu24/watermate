@@ -171,6 +171,7 @@ const {
   undoLastAction,
   setPreferences,
   syncBackendLogs,
+  clearAllData,
 } = useWaterTracker();
 
 const {
@@ -299,8 +300,11 @@ onMounted(async () => {
   }
 });
 
-// Re-fetch backend logs and update state
+// Re-fetch backend logs and update state (only for authenticated user)
 async function refreshBackendLogs() {
+  if (!currentUser.value) {
+    return;
+  }
   try {
     const backendLogs = await api.fetchWaterLogs();
     if (backendLogs && Array.isArray(backendLogs)) {
@@ -366,8 +370,10 @@ function handleLogout() {
   api.clearAuthToken();
   currentUser.value = null;
   storageMode.value = 'local';
+  clearAllData();
+  eventReminders.value = [];
   showAuthModal.value = false;
-  showToast('Đã đăng xuất. Bạn đang ở chế độ Lưu trên máy (Local)', 'info');
+  showToast('Đã đăng xuất. Dữ liệu cá nhân đã được bảo mật ẩn đi.', 'info');
 }
 
 // Quick Handlers
@@ -545,6 +551,9 @@ async function handleTestTrash() {
 
 // Event Reminders Handlers
 async function refreshEventReminders() {
+  if (!currentUser.value) {
+    return;
+  }
   try {
     const list = await api.fetchEventReminders();
     if (Array.isArray(list)) {
