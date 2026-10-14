@@ -24,16 +24,28 @@
       <!-- Main Content Area -->
       <div class="flex-1 overflow-y-auto space-y-4 py-4 pr-1">
 
-        <!-- Button to open Add Event Form -->
-        <div v-if="!showForm" class="flex items-center justify-between gap-2">
+        <!-- Button to open Add Event Form & Auto delete toggle -->
+        <div v-if="!showForm" class="space-y-2">
           <button
             type="button"
             @click="openAddForm"
-            class="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
+            class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
           >
             <Plus class="w-4 h-4" />
             <span>Thêm sự kiện cần nhắc</span>
           </button>
+
+          <!-- Auto delete toggle option ("Khi nào xong tự xoá") -->
+          <div class="px-3 py-2 rounded-xl bg-purple-50/70 border border-purple-100 flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-purple-900 block">Khi nào xong tự xoá</span>
+              <span class="text-[10px] text-slate-400">Tự động xóa khỏi danh sách khi tích hoàn thành</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" v-model="isAutoDelete" class="sr-only peer" />
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+          </div>
         </div>
 
         <!-- Add / Edit Form -->
@@ -204,7 +216,7 @@
               <div class="flex items-center gap-1 shrink-0 pt-0.5">
                 <button
                   type="button"
-                  @click="$emit('toggle-completed', ev.id)"
+                  @click="handleToggle(ev.id)"
                   :title="ev.is_completed ? 'Đánh dấu chưa xong' : 'Đánh dấu đã hoàn thành'"
                   class="w-7 h-7 rounded-lg flex items-center justify-center transition-all active:scale-90"
                   :class="ev.is_completed ? 'bg-emerald-500 text-white' : 'bg-slate-100 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600'"
@@ -266,6 +278,7 @@ import {
 
 const props = defineProps<{
   events: EventReminder[];
+  autoDelete?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -278,12 +291,17 @@ const emit = defineEmits<{
     event_time: string;
     remind_days: string;
   }): void;
-  (e: 'toggle-completed', id: string): void;
+  (e: 'toggle-completed', id: string, autoDelete: boolean): void;
   (e: 'delete-event', id: string): void;
 }>();
 
+const isAutoDelete = ref(props.autoDelete ?? true);
 const showForm = ref(false);
 const editingId = ref<string | null>(null);
+
+function handleToggle(id: string) {
+  emit('toggle-completed', id, isAutoDelete.value);
+}
 
 const formTitle = ref('');
 const formDescription = ref('');

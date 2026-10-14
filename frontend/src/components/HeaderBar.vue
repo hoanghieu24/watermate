@@ -16,16 +16,32 @@
     </div>
 
     <!-- Actions -->
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1.5">
+      <!-- Account / Storage Mode Button -->
+      <button
+        @click="$emit('open-auth')"
+        :title="currentUser ? `Tài khoản: ${currentUser.username} (Đồng bộ Cloud)` : 'Chế độ lưu trên máy (Local)'"
+        class="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 relative"
+        :class="currentUser ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-500'"
+      >
+        <Cloud v-if="currentUser" class="w-4 h-4" />
+        <User v-else class="w-4 h-4" />
+        <span
+          v-if="currentUser"
+          class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"
+        ></span>
+      </button>
+
+      <!-- Events Button -->
       <button
         @click="$emit('open-events')"
         aria-label="Lịch nhắc sự kiện"
-        class="w-9 h-9 rounded-full bg-slate-100 hover:bg-purple-50 active:scale-95 text-slate-600 hover:text-purple-600 flex items-center justify-center transition-all relative"
+        class="w-8 h-8 rounded-full bg-slate-100 hover:bg-purple-50 active:scale-95 text-slate-600 hover:text-purple-600 flex items-center justify-center transition-all relative"
       >
         <CalendarDays class="w-4 h-4" />
         <span
           v-if="eventsCount && eventsCount > 0"
-          class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-purple-600 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-sm"
+          class="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-purple-600 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-sm"
         >
           {{ eventsCount }}
         </span>
@@ -34,7 +50,7 @@
       <button
         @click="$emit('open-stats')"
         aria-label="Thống kê"
-        class="w-9 h-9 rounded-full bg-slate-100 hover:bg-sky-50 active:scale-95 text-slate-600 hover:text-sky-600 flex items-center justify-center transition-all"
+        class="w-8 h-8 rounded-full bg-slate-100 hover:bg-sky-50 active:scale-95 text-slate-600 hover:text-sky-600 flex items-center justify-center transition-all"
       >
         <BarChart3 class="w-4 h-4" />
       </button>
@@ -42,7 +58,7 @@
       <button
         @click="$emit('open-settings')"
         aria-label="Cài đặt"
-        class="w-9 h-9 rounded-full bg-slate-100 hover:bg-sky-50 active:scale-95 text-slate-600 hover:text-sky-600 flex items-center justify-center transition-all"
+        class="w-8 h-8 rounded-full bg-slate-100 hover:bg-sky-50 active:scale-95 text-slate-600 hover:text-sky-600 flex items-center justify-center transition-all"
       >
         <Settings class="w-4 h-4" />
       </button>
@@ -52,21 +68,23 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Droplets, BarChart3, Settings, CalendarDays } from 'lucide-vue-next';
+import { Droplets, BarChart3, Settings, CalendarDays, Cloud, User } from 'lucide-vue-next';
 import { formatReadableDate, getTodayLocalDate } from '../utils/date';
+import type { User as UserType } from '../types';
 
 defineProps<{
   eventsCount?: number;
+  currentUser?: UserType | null;
 }>();
 
 defineEmits<{
   (e: 'open-events'): void;
   (e: 'open-stats'): void;
   (e: 'open-settings'): void;
+  (e: 'open-auth'): void;
 }>();
 
 const displayDate = computed(() => {
   return formatReadableDate(getTodayLocalDate());
 });
 </script>
-

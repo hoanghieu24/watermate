@@ -3,9 +3,11 @@
     <!-- Header -->
     <HeaderBar
       :events-count="upcomingEventsCount"
+      :current-user="currentUser"
       @open-events="showEventsModal = true"
       @open-stats="showStatsModal = true"
       @open-settings="showSettingsModal = true"
+      @open-auth="showAuthModal = true"
     />
 
     <!-- Toast Notification Banner -->
@@ -73,13 +75,23 @@
 
     <!-- Footer Safe Area -->
     <footer class="pb-safe pt-2 text-center text-[10px] text-slate-400 font-medium">
-      WaterMate PWA • Nhắc & Theo Dõi Uống Nước
+      WaterMate PWA • Nhắc Uống Nước • Lịch Sự Kiện • Đổ Rác
     </footer>
 
     <!-- Modals -->
+    <AuthModal
+      v-if="showAuthModal"
+      :current-user="currentUser"
+      @close="showAuthModal = false"
+      @login="handleLogin"
+      @register="handleRegister"
+      @logout="handleLogout"
+    />
+
     <EventRemindersModal
       v-if="showEventsModal"
       :events="eventReminders"
+      :auto-delete="reminderSettings.event_auto_delete"
       @close="showEventsModal = false"
       @save-event="handleSaveEvent"
       @toggle-completed="handleToggleEvent"
@@ -104,6 +116,7 @@
       :preferences="preferences"
       :settings="reminderSettings"
       :is-push-subscribed="isPushSubscribed"
+      :current-user="currentUser"
       @close="showSettingsModal = false"
       @save-prefs="handleSavePrefs"
       @save-settings="handleSaveSettings"
@@ -111,6 +124,9 @@
       @resume="resumeReminder"
       @request-push="handleRequestPush"
       @test-push="handleTestPush"
+      @test-trash="handleTestTrash"
+      @open-auth="showSettingsModal = false; showAuthModal = true"
+      @open-events="showSettingsModal = false; showEventsModal = true"
     />
   </div>
 </template>
@@ -125,14 +141,16 @@ import CustomWaterModal from './components/CustomWaterModal.vue';
 import StatsModal from './components/StatsModal.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import EventRemindersModal from './components/EventRemindersModal.vue';
+import AuthModal from './components/AuthModal.vue';
 import IosInstallBanner from './components/IosInstallBanner.vue';
 
 import { useWaterTracker } from './composables/useWaterTracker';
 import { useReminder } from './composables/useReminder';
-import type { UserPreferences, ReminderSettings, EventReminder } from './types';
+import type { UserPreferences, ReminderSettings, EventReminder, User } from './types';
 import * as api from './services/api';
 
 const {
+  logs,
   preferences,
   currentDayLogs,
   currentDayTotalMl,
@@ -169,6 +187,10 @@ const showCustomModal = ref(false);
 const showStatsModal = ref(false);
 const showSettingsModal = ref(false);
 const showEventsModal = ref(false);
+const showAuthModal = ref(false);
+const currentUser = ref<User | null>(null);
+const storageMode = ref<'local' | 'cloud'>('local');
+
 const eventReminders = ref<EventReminder[]>([]);
 const toast = ref<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
@@ -193,16 +215,29 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'succes
 
 // Initial Sync with Backend if available
 onMounted(async () => {
+  // Check auth state
+  try {
+    const user = await api.fetchCurrentUser();
+    if (user) {
+      currentUser.value = user;
+      storageMode.value = 'cloud';
+    }
+  } catch {
+    storageMode.value = 'local';
+  }
+
   await Promise.allSettled([
     refreshBackendLogs(),
     refreshEventReminders(),
   ]);
 
-  // Check URL query parameter (e.g. from push click ?tab=events)
+  // Check URL query parameter (e.g. from push click ?tab=events or ?tab=trash)
   try {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('tab') === 'events') {
       showEventsModal.value = true;
+    } else if (urlParams.get('tab') === 'trash') {
+      showSettingsModal.value = true;
     }
   } catch {
     // ignore
@@ -235,11 +270,13 @@ onMounted(async () => {
         showToast(event.data.body || '💧 Đến giờ uống nước rồi!', 'info');
         refreshBackendLogs();
       } else if (event.data?.type === 'EVENT_PUSH_RECEIVED') {
-        showToast(event.data.body || '📅 Bạn có sự kiện cần lưu ý!', 'info');
+        showToast(event.data.body || '📅 Bạn có nhắc nhở quan trọng!', 'info');
         refreshEventReminders();
       } else if (event.data?.type === 'OPEN_TAB' && event.data?.tab === 'events') {
         showEventsModal.value = true;
         refreshEventReminders();
+      } else if (event.data?.type === 'OPEN_TAB' && event.data?.tab === 'trash') {
+        showSettingsModal.value = true;
       } else if (event.data?.type === 'REFRESH_LOGS' || event.data?.type === 'AUTO_ADD_SIP') {
         refreshBackendLogs();
         refreshEventReminders();
@@ -272,6 +309,65 @@ async function refreshBackendLogs() {
   } catch {
     // offline fallback
   }
+}
+
+// Auth Handlers (Local vs Account/Password)
+async function handleLogin(payload: { username: string; password: string; syncLocal: boolean }) {
+  try {
+    const res = await api.loginUser(payload.username, payload.password);
+    api.setAuthToken(res.token);
+    currentUser.value = res.user;
+    storageMode.value = 'cloud';
+    showToast(`Đăng nhập thành công! Chào ${res.user.username}`, 'success');
+
+    if (payload.syncLocal) {
+      await api.syncLocalData({
+        water_logs: logs.value,
+        event_reminders: eventReminders.value,
+        settings: reminderSettings.value,
+      });
+      showToast('Đã đồng bộ dữ liệu lên tài khoản đám mây!', 'info');
+    }
+
+    await Promise.allSettled([refreshBackendLogs(), refreshEventReminders()]);
+    const remoteSettings = await api.fetchReminderSettings();
+    if (remoteSettings) updateSettings(remoteSettings);
+    showAuthModal.value = false;
+  } catch (err: unknown) {
+    showToast((err as Error)?.message || 'Lỗi đăng nhập', 'error');
+  }
+}
+
+async function handleRegister(payload: { username: string; password: string; syncLocal: boolean }) {
+  try {
+    const res = await api.registerUser(payload.username, payload.password);
+    api.setAuthToken(res.token);
+    currentUser.value = res.user;
+    storageMode.value = 'cloud';
+    showToast(`Tạo tài khoản thành công! Xin chào ${res.user.username}`, 'success');
+
+    if (payload.syncLocal) {
+      await api.syncLocalData({
+        water_logs: logs.value,
+        event_reminders: eventReminders.value,
+        settings: reminderSettings.value,
+      });
+      showToast('Đã lưu dữ liệu từ máy lên tài khoản mới!', 'info');
+    }
+
+    await Promise.allSettled([refreshBackendLogs(), refreshEventReminders()]);
+    showAuthModal.value = false;
+  } catch (err: unknown) {
+    showToast((err as Error)?.message || 'Lỗi đăng ký tài khoản', 'error');
+  }
+}
+
+function handleLogout() {
+  api.clearAuthToken();
+  currentUser.value = null;
+  storageMode.value = 'local';
+  showAuthModal.value = false;
+  showToast('Đã đăng xuất. Bạn đang ở chế độ Lưu trên máy (Local)', 'info');
 }
 
 // Quick Handlers
@@ -343,7 +439,7 @@ function handleSavePrefs(prefs: Partial<UserPreferences>) {
 
 async function handleSaveSettings(newSettings: Partial<ReminderSettings>) {
   updateSettings(newSettings);
-  showToast('Đã lưu cài đặt nhắc nhở', 'success');
+  showToast('Đã lưu cài đặt thông báo', 'success');
   try {
     await api.updateReminderSettings(newSettings);
   } catch {
@@ -422,6 +518,18 @@ async function handleTestPush() {
   }
 }
 
+async function handleTestTrash() {
+  try {
+    showToast('Đang gửi thông báo đổ rác thử nghiệm...', 'info');
+    const result = await api.sendTestTrashNotification();
+    if (result.success) {
+      showToast('Đã gửi thông báo đổ rác thử nghiệm thành công!', 'success');
+    }
+  } catch (err: unknown) {
+    showToast((err as Error)?.message || 'Lỗi gửi test thông báo đổ rác', 'error');
+  }
+}
+
 // Event Reminders Handlers
 async function refreshEventReminders() {
   try {
@@ -462,10 +570,15 @@ async function handleSaveEvent(data: {
   }
 }
 
-async function handleToggleEvent(id: string) {
+async function handleToggleEvent(id: string, autoDelete: boolean) {
   try {
-    await api.toggleEventReminder(id);
+    const res = await api.toggleEventReminder(id, autoDelete);
     await refreshEventReminders();
+    if (res.deleted) {
+      showToast('Đã hoàn thành & tự động xóa sự kiện!', 'success');
+    } else {
+      showToast('Đã cập nhật trạng thái sự kiện', 'info');
+    }
   } catch (err: unknown) {
     showToast((err as Error)?.message || 'Lỗi khi cập nhật trạng thái', 'error');
   }

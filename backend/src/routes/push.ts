@@ -18,11 +18,29 @@ pushRouter.post('/subscribe', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Subscription không hợp lệ' });
     }
 
-    const subId = await saveSubscription(subscription);
+    const subId = await saveSubscription(subscription, req.userId);
     res.status(201).json({ success: true, id: subId });
   } catch (err) {
     console.error('Error saving subscription:', err);
     res.status(500).json({ error: 'Không thể lưu subscription' });
+  }
+});
+
+// POST /api/push/test-trash
+pushRouter.post('/test-trash', async (_req: Request, res: Response) => {
+  try {
+    const payload = {
+      title: 'WaterMate - Lịch đổ rác hôm nay! 🗑️',
+      body: '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để giữ nhà cửa sạch sẽ nhé.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      url: '/?tab=trash',
+    };
+    const result = await sendNotificationToAll(payload, 'event');
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Error sending test trash push:', err);
+    res.status(500).json({ error: 'Lỗi gửi thông báo đổ rác thử nghiệm' });
   }
 });
 

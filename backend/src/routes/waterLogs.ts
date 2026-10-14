@@ -8,18 +8,38 @@ waterLogsRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { local_date } = req.query;
     let rows;
-    if (local_date && typeof local_date === 'string') {
-      rows = await dbQuery(`
-        SELECT * FROM water_logs
-        WHERE local_date = ?
-        ORDER BY created_at DESC
-      `, [local_date]);
+
+    if (req.userId) {
+      if (local_date && typeof local_date === 'string') {
+        rows = await dbQuery(`
+          SELECT * FROM water_logs
+          WHERE local_date = ? AND user_id = ?
+          ORDER BY created_at DESC
+        `, [local_date, req.userId]);
+      } else {
+        rows = await dbQuery(`
+          SELECT * FROM water_logs
+          WHERE user_id = ?
+          ORDER BY created_at DESC
+        `, [req.userId]);
+      }
     } else {
-      rows = await dbQuery(`
-        SELECT * FROM water_logs
-        ORDER BY created_at DESC
-      `);
+      // Local / default mode
+      if (local_date && typeof local_date === 'string') {
+        rows = await dbQuery(`
+          SELECT * FROM water_logs
+          WHERE local_date = ? AND (user_id IS NULL OR user_id = '')
+          ORDER BY created_at DESC
+        `, [local_date]);
+      } else {
+        rows = await dbQuery(`
+          SELECT * FROM water_logs
+          WHERE (user_id IS NULL OR user_id = '')
+          ORDER BY created_at DESC
+        `);
+      }
     }
+
     res.json(rows);
   } catch (err) {
     console.error('Error fetching water logs:', err);
@@ -32,7 +52,6 @@ waterLogsRouter.post('/', async (req: Request, res: Response) => {
   try {
     const { id, amount_ml, sip_equivalent, source, created_at, local_date } = req.body;
 
-    // Strict validation
     const parsedAmount = Number(amount_ml);
     if (!parsedAmount || parsedAmount <= 0 || isNaN(parsedAmount)) {
       return res.status(400).json({ error: 'Lượng nước phải là số dương lớn hơn 0' });
@@ -43,11 +62,12 @@ waterLogsRouter.post('/', async (req: Request, res: Response) => {
     const dateStr = local_date || nowIso.substring(0, 10);
     const parsedSips = Number(sip_equivalent) || Number((parsedAmount / 50).toFixed(1));
     const validSource = source || 'custom';
+    const userId = req.userId || null;
 
     await dbRun(`
-      INSERT INTO water_logs (id, amount_ml, sip_equivalent, source, created_at, local_date)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [logId, Math.round(parsedAmount), parsedSips, validSource, nowIso, dateStr]);
+      INSERT INTO water_logs (id, amount_ml, sip_equivalent, source, created_at, local_date, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [logId, Math.round(parsedAmount), parsedSips, validSource, nowIso, dateStr, userId]);
 
     const created = await dbGet('SELECT * FROM water_logs WHERE id = ?', [logId]);
     res.status(201).json(created);
@@ -71,11 +91,20 @@ waterLogsRouter.put('/:id', async (req: Request, res: Response) => {
     const sipUnit = Number(sip_ml) || 50;
     const newSips = Number((parsedAmount / sipUnit).toFixed(1));
 
-    const result = await dbRun(`
-      UPDATE water_logs
-      SET amount_ml = ?, sip_equivalent = ?
-      WHERE id = ?
-    `, [Math.round(parsedAmount), newSips, id]);
+    let result;
+    if (req.userId) {
+      result = await dbRun(`
+        UPDATE water_logs
+        SET amount_ml = ?, sip_equivalent = ?
+        WHERE id = ? AND (user_id = ? OR user_id IS NULL)
+      `, [Math.round(parsedAmount), newSips, id, req.userId]);
+    } else {
+      result = await dbRun(`
+        UPDATE water_logs
+        SET amount_ml = ?, sip_equivalent = ?
+        WHERE id = ?
+      `, [Math.round(parsedAmount), newSips, id]);
+    }
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Không tìm thấy bản ghi' });
@@ -93,10 +122,18 @@ waterLogsRouter.put('/:id', async (req: Request, res: Response) => {
 waterLogsRouter.delete('/clear-day', async (req: Request, res: Response) => {
   try {
     const { local_date } = req.query;
-    if (local_date && typeof local_date === 'string') {
-      await dbRun('DELETE FROM water_logs WHERE local_date = ?', [local_date]);
+    if (req.userId) {
+      if (local_date && typeof local_date === 'string') {
+        await dbRun('DELETE FROM water_logs WHERE local_date = ? AND user_id = ?', [local_date, req.userId]);
+      } else {
+        await dbRun('DELETE FROM water_logs WHERE user_id = ?', [req.userId]);
+      }
     } else {
-      await dbRun('DELETE FROM water_logs');
+      if (local_date && typeof local_date === 'string') {
+        await dbRun('DELETE FROM water_logs WHERE local_date = ? AND (user_id IS NULL OR user_id = "")', [local_date]);
+      } else {
+        await dbRun('DELETE FROM water_logs WHERE (user_id IS NULL OR user_id = "")');
+      }
     }
     res.json({ success: true, message: 'Đã xóa tất cả bản ghi' });
   } catch (err) {
@@ -109,7 +146,12 @@ waterLogsRouter.delete('/clear-day', async (req: Request, res: Response) => {
 waterLogsRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const result = await dbRun('DELETE FROM water_logs WHERE id = ?', [id]);
+    let result;
+    if (req.userId) {
+      result = await dbRun('DELETE FROM water_logs WHERE id = ? AND (user_id = ? OR user_id IS NULL)', [id, req.userId]);
+    } else {
+      result = await dbRun('DELETE FROM water_logs WHERE id = ?', [id]);
+    }
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Không tìm thấy bản ghi cần xóa' });

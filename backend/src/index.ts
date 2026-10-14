@@ -9,6 +9,8 @@ import { waterLogsRouter } from './routes/waterLogs.js';
 import { reminderSettingsRouter } from './routes/reminderSettings.js';
 import { pushRouter } from './routes/push.js';
 import { eventRemindersRouter } from './routes/eventReminders.js';
+import { authRouter } from './routes/auth.js';
+import { optionalAuthMiddleware } from './middleware/auth.js';
 import { startReminderScheduler } from './scheduler/reminderScheduler.js';
 
 dotenv.config();
@@ -19,6 +21,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(optionalAuthMiddleware);
 
 // API Routes
 app.get('/api/health', (_req, res) => {
@@ -30,6 +33,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+app.use('/api/auth', authRouter);
 app.use('/api/water-logs', waterLogsRouter);
 app.use('/api/reminder-settings', reminderSettingsRouter);
 app.use('/api/push', pushRouter);

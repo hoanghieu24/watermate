@@ -5,6 +5,15 @@ import { sendNotificationToAll } from '../services/pushService.js';
 interface ReminderSettingsRow {
   id: number;
   enabled: number | boolean;
+  water_enabled?: number | boolean;
+  event_enabled?: number | boolean;
+  event_auto_delete?: number | boolean;
+  trash_enabled?: number | boolean;
+  trash_days?: string;
+  trash_time?: string;
+  trash_message?: string;
+  last_trash_notified_date?: string | null;
+  user_id?: string | null;
   start_time: string;
   end_time: string;
   interval_minutes: number;
@@ -17,9 +26,9 @@ interface ReminderSettingsRow {
 }
 
 export function startReminderScheduler() {
-  console.log('Starting WaterMate Reminder Scheduler (node-cron)...');
+  console.log('Starting WaterMate Multi-Reminder Scheduler (node-cron)...');
 
-  // Run every minute: check if it's time to trigger water and event reminders
+  // Run every minute: evaluate water, event, and trash reminders
   cron.schedule('* * * * *', async () => {
     try {
       await evaluateAndSendReminder();
@@ -31,6 +40,12 @@ export function startReminderScheduler() {
       await evaluateEventReminders();
     } catch (err) {
       console.error('Error during event reminder evaluation:', err);
+    }
+
+    try {
+      await evaluateTrashReminders();
+    } catch (err) {
+      console.error('Error during trash reminder evaluation:', err);
     }
   });
 }
@@ -56,9 +71,14 @@ export function isTimeInQuietHours(currentTotalMinutes: number, quietStart: stri
   return false;
 }
 
+// 1. Water Reminder (Tắt bật thông báo uống nước)
 export async function evaluateAndSendReminder(): Promise<boolean> {
   const settings = await dbGet<ReminderSettingsRow>('SELECT * FROM reminder_settings WHERE id = 1');
-  if (!settings || !settings.enabled) {
+  if (!settings) return false;
+
+  // Check water reminder toggle
+  const isWaterEnabled = settings.water_enabled !== undefined ? Boolean(settings.water_enabled) : Boolean(settings.enabled);
+  if (!isWaterEnabled || !settings.enabled) {
     return false;
   }
 
@@ -113,7 +133,7 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
     return false;
   }
 
-  // Prevent duplicate reminders within the same minute (since cron runs every minute)
+  // Prevent duplicate reminders within the same minute
   const lastSent = await dbGet<{ sent_at: string }>(`
     SELECT sent_at FROM notification_logs
     WHERE status = 'sent'
@@ -125,12 +145,11 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
     const lastSentTime = new Date(lastSent.sent_at).getTime();
     const elapsedMs = now.getTime() - lastSentTime;
     if (elapsedMs < 60 * 1000) {
-      // Already sent in this minute, skip duplicate
       return false;
     }
   }
 
-  console.log(`[Scheduler] Triggering reminder at ${currentTimeStr} (${tz})`);
+  console.log(`[Scheduler] Triggering water reminder at ${currentTimeStr} (${tz})`);
 
   // Auto record +1 sip (50ml) in database for this reminder!
   const nowIso = now.toISOString();
@@ -156,12 +175,21 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
     url: '/?refresh=1',
   };
 
-  const result = await sendNotificationToAll(payload);
+  const result = await sendNotificationToAll(payload, 'sent');
   console.log(`[Scheduler] Reminder sent: ${result.sent} succeeded, ${result.failed} failed out of ${result.total} devices.`);
   return result.sent > 0;
 }
 
+// 2. Event Reminder (Tắt bật thông báo nhắc nhở lịch & khi nào xong tự xoá)
 export async function evaluateEventReminders(): Promise<void> {
+  const globalSettings = await dbGet<ReminderSettingsRow>('SELECT event_enabled, event_auto_delete FROM reminder_settings WHERE id = 1');
+  const isEventEnabled = globalSettings?.event_enabled !== undefined ? Boolean(globalSettings.event_enabled) : true;
+  const isAutoDelete = globalSettings?.event_auto_delete !== undefined ? Boolean(globalSettings.event_auto_delete) : true;
+
+  if (!isEventEnabled) {
+    return;
+  }
+
   const now = new Date();
   const tz = 'Asia/Ho_Chi_Minh';
 
@@ -173,6 +201,18 @@ export async function evaluateEventReminders(): Promise<void> {
     day: '2-digit',
   });
   const todayStr = dateFormatter.format(now); // "YYYY-MM-DD"
+
+  // Auto clean-up expired / completed events if auto-delete is enabled ("khi nào xong tự xoá")
+  if (isAutoDelete) {
+    try {
+      // Delete completed events
+      await dbRun('DELETE FROM event_reminders WHERE is_completed = TRUE OR is_completed = 1');
+      // Delete past events that are older than today and were already notified
+      await dbRun('DELETE FROM event_reminders WHERE event_date < ? AND last_notified_date IS NOT NULL', [todayStr]);
+    } catch (cleanupErr) {
+      console.error('[EventScheduler] Error auto-cleaning completed/expired events:', cleanupErr);
+    }
+  }
 
   // Format current time in HH:mm
   const timeFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -221,7 +261,6 @@ export async function evaluateEventReminders(): Promise<void> {
     // Check target reminder time (default 09:00)
     const targetTime = event.event_time || '09:00';
     if (currentTimeStr < targetTime) {
-      // Haven't reached the reminder time yet today
       continue;
     }
 
@@ -261,6 +300,92 @@ export async function evaluateEventReminders(): Promise<void> {
 
       // Mark event as notified for today
       await dbRun('UPDATE event_reminders SET last_notified_date = ? WHERE id = ?', [todayStr, event.id]);
+    }
+  }
+}
+
+// 3. Trash Reminder (Tắt bật thông báo lịch đổ rác)
+export async function evaluateTrashReminders(): Promise<void> {
+  const activeSettings = await dbQuery<ReminderSettingsRow>(`
+    SELECT * FROM reminder_settings
+    WHERE trash_enabled = TRUE OR trash_enabled = 1
+  `);
+
+  if (!activeSettings || activeSettings.length === 0) {
+    return;
+  }
+
+  const now = new Date();
+  const tz = 'Asia/Ho_Chi_Minh';
+
+  // Format today's date in YYYY-MM-DD
+  const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const todayStr = dateFormatter.format(now);
+
+  // Format current time in HH:mm
+  const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const currentTimeStr = timeFormatter.format(now); // "HH:mm"
+
+  // Day of week in Asia/Ho_Chi_Minh: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const dayFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    weekday: 'short',
+  });
+  const dayShort = dayFormatter.format(now); // "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+  const dayMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  const currentDayOfWeek = dayMap[dayShort] !== undefined ? dayMap[dayShort] : now.getDay();
+
+  for (const s of activeSettings) {
+    // Check if already notified today
+    if (s.last_trash_notified_date === todayStr) {
+      continue;
+    }
+
+    // Check time
+    const targetTime = s.trash_time || '19:00';
+    if (currentTimeStr < targetTime) {
+      continue;
+    }
+
+    // Check days configured: e.g. "1,3,5" (T2, T4, T6)
+    const configuredDays = (s.trash_days || '1,3,5')
+      .split(',')
+      .map((item) => Number(item.trim()))
+      .filter((n) => !isNaN(n));
+
+    if (configuredDays.includes(currentDayOfWeek)) {
+      console.log(`[TrashScheduler] Triggering trash reminder for setting #${s.id} at ${currentTimeStr}`);
+
+      const payload = {
+        title: 'WaterMate - Lịch đổ rác hôm nay! 🗑️',
+        body: s.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để giữ nhà cửa sạch sẽ nhé.',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        url: '/?tab=trash',
+      };
+
+      await sendNotificationToAll(payload, 'event');
+
+      // Update last notified date
+      await dbRun('UPDATE reminder_settings SET last_trash_notified_date = ? WHERE id = ?', [todayStr, s.id]);
     }
   }
 }

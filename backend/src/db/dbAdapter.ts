@@ -86,19 +86,39 @@ export async function initDb(): Promise<void> {
   if (isPostgres && pgPool) {
     // PostgreSQL Tables
     await pgPool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(100) PRIMARY KEY,
+        username VARCHAR(100) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        salt VARCHAR(100) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
       CREATE TABLE IF NOT EXISTS water_logs (
         id VARCHAR(100) PRIMARY KEY,
         amount_ml INTEGER NOT NULL,
         sip_equivalent NUMERIC(5, 1) NOT NULL,
         source VARCHAR(50) NOT NULL,
         created_at TIMESTAMPTZ NOT NULL,
-        local_date VARCHAR(20) NOT NULL
+        local_date VARCHAR(20) NOT NULL,
+        user_id VARCHAR(100)
       );
       CREATE INDEX IF NOT EXISTS idx_water_logs_date ON water_logs(local_date);
+      CREATE INDEX IF NOT EXISTS idx_water_logs_user ON water_logs(user_id);
 
       CREATE TABLE IF NOT EXISTS reminder_settings (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
+        id SERIAL PRIMARY KEY,
         enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        water_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        event_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        event_auto_delete BOOLEAN NOT NULL DEFAULT TRUE,
+        trash_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+        trash_days VARCHAR(50) NOT NULL DEFAULT '1,3,5',
+        trash_time VARCHAR(10) NOT NULL DEFAULT '19:00',
+        trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+        last_trash_notified_date VARCHAR(20),
+        user_id VARCHAR(100),
         start_time VARCHAR(10) NOT NULL DEFAULT '08:00',
         end_time VARCHAR(10) NOT NULL DEFAULT '22:00',
         interval_minutes INTEGER NOT NULL DEFAULT 60,
@@ -116,7 +136,8 @@ export async function initDb(): Promise<void> {
         subscription_json TEXT NOT NULL,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL
+        updated_at TIMESTAMPTZ NOT NULL,
+        user_id VARCHAR(100)
       );
       CREATE INDEX IF NOT EXISTS idx_push_endpoint ON push_subscriptions(endpoint);
 
@@ -137,17 +158,34 @@ export async function initDb(): Promise<void> {
         remind_days VARCHAR(50) NOT NULL DEFAULT '3,2,1,0',
         is_completed BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMPTZ NOT NULL,
-        last_notified_date VARCHAR(20)
+        last_notified_date VARCHAR(20),
+        user_id VARCHAR(100)
       );
       CREATE INDEX IF NOT EXISTS idx_event_date ON event_reminders(event_date);
     `);
+
+    // Migration columns for existing Postgres tables
+    try { await pgPool.query('ALTER TABLE reminder_settings DROP CONSTRAINT IF EXISTS reminder_settings_id_check;'); } catch {}
+    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS water_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
+    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
+    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_auto_delete BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
+    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_enabled BOOLEAN NOT NULL DEFAULT FALSE;'); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_days VARCHAR(50) NOT NULL DEFAULT '1,3,5';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_time VARCHAR(10) NOT NULL DEFAULT '19:00';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.';"); } catch {}
+    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS last_trash_notified_date VARCHAR(20);'); } catch {}
+    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
+
+    try { await pgPool.query('ALTER TABLE water_logs ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
+    try { await pgPool.query('ALTER TABLE event_reminders ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
+    try { await pgPool.query('ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
 
     // Ensure default settings row
     const existing = await pgPool.query('SELECT id FROM reminder_settings WHERE id = 1');
     if (existing.rowCount === 0) {
       await pgPool.query(`
-        INSERT INTO reminder_settings (id, enabled, start_time, end_time, interval_minutes, timezone, notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time)
-        VALUES (1, true, '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh', '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', false, '12:00', '13:30')
+        INSERT INTO reminder_settings (id, enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled, trash_days, trash_time, trash_message, start_time, end_time, interval_minutes, timezone, notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time)
+        VALUES (1, true, true, true, true, false, '1,3,5', '19:00', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.', '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh', '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', false, '12:00', '13:30')
       `);
     }
 
@@ -157,19 +195,39 @@ export async function initDb(): Promise<void> {
     sqliteDb.exec(`
       PRAGMA foreign_keys = ON;
 
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
       CREATE TABLE IF NOT EXISTS water_logs (
         id TEXT PRIMARY KEY,
         amount_ml INTEGER NOT NULL,
         sip_equivalent REAL NOT NULL,
         source TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        local_date TEXT NOT NULL
+        local_date TEXT NOT NULL,
+        user_id TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_water_logs_date ON water_logs(local_date);
+      CREATE INDEX IF NOT EXISTS idx_water_logs_user ON water_logs(user_id);
 
       CREATE TABLE IF NOT EXISTS reminder_settings (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
+        id INTEGER PRIMARY KEY,
         enabled INTEGER NOT NULL DEFAULT 1,
+        water_enabled INTEGER NOT NULL DEFAULT 1,
+        event_enabled INTEGER NOT NULL DEFAULT 1,
+        event_auto_delete INTEGER NOT NULL DEFAULT 1,
+        trash_enabled INTEGER NOT NULL DEFAULT 0,
+        trash_days TEXT NOT NULL DEFAULT '1,3,5',
+        trash_time TEXT NOT NULL DEFAULT '19:00',
+        trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+        last_trash_notified_date TEXT,
+        user_id TEXT,
         start_time TEXT NOT NULL DEFAULT '08:00',
         end_time TEXT NOT NULL DEFAULT '22:00',
         interval_minutes INTEGER NOT NULL DEFAULT 60,
@@ -185,12 +243,25 @@ export async function initDb(): Promise<void> {
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN quiet_hours_enabled INTEGER NOT NULL DEFAULT 0;'); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN quiet_start_time TEXT NOT NULL DEFAULT '12:00';"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN quiet_end_time TEXT NOT NULL DEFAULT '13:30';"); } catch {}
+    try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN water_enabled INTEGER NOT NULL DEFAULT 1;'); } catch {}
+    try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN event_enabled INTEGER NOT NULL DEFAULT 1;'); } catch {}
+    try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN event_auto_delete INTEGER NOT NULL DEFAULT 1;'); } catch {}
+    try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN trash_enabled INTEGER NOT NULL DEFAULT 0;'); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_days TEXT NOT NULL DEFAULT '1,3,5';"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_time TEXT NOT NULL DEFAULT '19:00';"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.';"); } catch {}
+    try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN last_trash_notified_date TEXT;'); } catch {}
+    try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN user_id TEXT;'); } catch {}
+
+    try { sqliteDb.exec('ALTER TABLE water_logs ADD COLUMN user_id TEXT;'); } catch {}
+    try { sqliteDb.exec('ALTER TABLE event_reminders ADD COLUMN user_id TEXT;'); } catch {}
+    try { sqliteDb.exec('ALTER TABLE push_subscriptions ADD COLUMN user_id TEXT;'); } catch {}
 
     const settingsRow = sqliteDb.prepare('SELECT id FROM reminder_settings WHERE id = 1').get();
     if (!settingsRow) {
       sqliteDb.prepare(`
-        INSERT INTO reminder_settings (id, enabled, start_time, end_time, interval_minutes, timezone, notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time)
-        VALUES (1, 1, '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh', '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', 0, '12:00', '13:30')
+        INSERT INTO reminder_settings (id, enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled, trash_days, trash_time, trash_message, start_time, end_time, interval_minutes, timezone, notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time)
+        VALUES (1, 1, 1, 1, 1, 0, '1,3,5', '19:00', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.', '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh', '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', 0, '12:00', '13:30')
       `).run();
     }
 
@@ -201,7 +272,8 @@ export async function initDb(): Promise<void> {
         subscription_json TEXT NOT NULL,
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        user_id TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_push_endpoint ON push_subscriptions(endpoint);
 
@@ -222,7 +294,8 @@ export async function initDb(): Promise<void> {
         remind_days TEXT NOT NULL DEFAULT '3,2,1,0',
         is_completed INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
-        last_notified_date TEXT
+        last_notified_date TEXT,
+        user_id TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_event_date ON event_reminders(event_date);
     `);

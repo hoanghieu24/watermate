@@ -11,7 +11,7 @@ export interface PushPayload {
   data?: Record<string, unknown>;
 }
 
-export async function saveSubscription(subscription: webpush.PushSubscription) {
+export async function saveSubscription(subscription: webpush.PushSubscription, userId?: string | null) {
   const now = new Date().toISOString();
   const endpoint = subscription.endpoint;
   const json = JSON.stringify(subscription);
@@ -21,15 +21,15 @@ export async function saveSubscription(subscription: webpush.PushSubscription) {
   if (existing) {
     await dbRun(`
       UPDATE push_subscriptions
-      SET subscription_json = ?, is_active = TRUE, updated_at = ?
+      SET subscription_json = ?, is_active = TRUE, updated_at = ?, user_id = COALESCE(?, user_id)
       WHERE id = ?
-    `, [json, now, existing.id]);
+    `, [json, now, userId || null, existing.id]);
     return existing.id;
   } else {
     await dbRun(`
-      INSERT INTO push_subscriptions (endpoint, subscription_json, is_active, created_at, updated_at)
-      VALUES (?, ?, TRUE, ?, ?)
-    `, [endpoint, json, now, now]);
+      INSERT INTO push_subscriptions (endpoint, subscription_json, is_active, created_at, updated_at, user_id)
+      VALUES (?, ?, TRUE, ?, ?, ?)
+    `, [endpoint, json, now, now, userId || null]);
     const inserted = await dbGet<{ id: number }>('SELECT id FROM push_subscriptions WHERE endpoint = ?', [endpoint]);
     return inserted?.id || 1;
   }
