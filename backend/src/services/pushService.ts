@@ -35,31 +35,41 @@ export async function saveSubscription(subscription: webpush.PushSubscription, u
   }
 }
 
-export async function sendNotificationToAll(payload: PushPayload, statusType: 'sent' | 'test' | 'event' = 'sent'): Promise<{ sent: number; failed: number; total: number }> {
+export async function sendNotificationToAll(
+  payload: PushPayload,
+  statusType: 'sent' | 'test' | 'event' = 'sent'
+): Promise<{ sent: number; failed: number; total: number; errors: string[] }> {
   const rows = await dbQuery<{ id: number; endpoint: string; subscription_json: string }>(
     'SELECT id, endpoint, subscription_json FROM push_subscriptions WHERE is_active = TRUE'
   );
 
   if (rows.length === 0) {
-    return { sent: 0, failed: 0, total: 0 };
+    return { sent: 0, failed: 0, total: 0, errors: [] };
   }
 
   let sent = 0;
   let failed = 0;
+  const errors: string[] = [];
   const now = new Date().toISOString();
   const payloadString = JSON.stringify(payload);
 
   for (const row of rows) {
     try {
       const sub = JSON.parse(row.subscription_json) as webpush.PushSubscription;
-      await webpush.sendNotification(sub, payloadString, {
+      const isApple = typeof row.endpoint === 'string' && row.endpoint.includes('push.apple.com');
+      const pushOptions: webpush.RequestOptions = {
         TTL: 60 * 60, // 1 hour time-to-live
         urgency: 'high',
-        headers: {
+      };
+
+      if (isApple) {
+        pushOptions.headers = {
           'apns-priority': '10',
           'apns-push-type': 'alert',
-        },
-      });
+        };
+      }
+
+      await webpush.sendNotification(sub, payloadString, pushOptions);
       sent++;
 
       // Log success
@@ -71,6 +81,8 @@ export async function sendNotificationToAll(payload: PushPayload, statusType: 's
       failed++;
       const statusCode = (err as { statusCode?: number })?.statusCode;
       const errorMessage = (err as Error)?.message || 'Unknown push error';
+      const fullError = `${statusCode || 'ERR'}: ${errorMessage}`;
+      errors.push(fullError);
 
       console.error(`Failed push to subscription ${row.id} (${statusCode}):`, errorMessage);
 
@@ -78,7 +90,7 @@ export async function sendNotificationToAll(payload: PushPayload, statusType: 's
       await dbRun(`
         INSERT INTO notification_logs (scheduled_at, sent_at, status, error_message)
         VALUES (?, ?, 'failed', ?)
-      `, [now, now, `${statusCode || 'ERR'}: ${errorMessage}`]);
+      `, [now, now, fullError]);
 
       // 404 or 410 indicates subscription has expired or unsubscribed
       if (statusCode === 404 || statusCode === 410) {
@@ -88,5 +100,5 @@ export async function sendNotificationToAll(payload: PushPayload, statusType: 's
     }
   }
 
-  return { sent, failed, total: rows.length };
+  return { sent, failed, total: rows.length, errors };
 }

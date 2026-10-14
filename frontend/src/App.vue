@@ -477,17 +477,23 @@ async function handleRequestPush() {
     const publicKey = await api.getVapidPublicKey();
     const convertedKey = urlBase64ToUint8Array(publicKey);
 
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedKey,
-      });
+    const existingSub = await reg.pushManager.getSubscription();
+    if (existingSub) {
+      try {
+        await existingSub.unsubscribe();
+      } catch (unsubErr) {
+        console.warn('Could not clear stale subscription:', unsubErr);
+      }
     }
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: convertedKey,
+    });
 
     await api.sendPushSubscription(sub.toJSON());
     isPushSubscribed.value = true;
-    showToast('Đã đăng ký Web Push thành công!', 'success');
+    showToast('Đã kích hoạt Web Push thành công!', 'success');
   } catch (err: unknown) {
     console.error('Push registration error:', err);
     showToast((err as Error)?.message || 'Lỗi khi kích hoạt Web Push', 'error');
@@ -506,12 +512,12 @@ async function handleTestPush() {
     if (result.success) {
       await refreshBackendLogs();
       if (result.sent && result.sent > 0) {
-        showToast(`Đã gửi thông báo & tự động cộng +1 ngụm (+50ml)!`, 'success');
+        showToast('Đã gửi thông báo & tự động cộng +1 ngụm (+50ml)!', 'success');
       } else {
-        showToast('Đã ghi nhận +1 ngụm! (Chưa có máy nào đăng ký push)', 'info');
+        showToast('Đã ghi nhận +1 ngụm! (Chưa có máy nào nhận được thông báo)', 'info');
       }
     } else {
-      showToast(result.message || 'Chưa gửi được thông báo', 'error');
+      showToast((result as any).error || result.message || 'Chưa gửi được thông báo', 'error');
     }
   } catch (err: unknown) {
     showToast((err as Error)?.message || 'Lỗi gửi test push', 'error');
@@ -519,11 +525,18 @@ async function handleTestPush() {
 }
 
 async function handleTestTrash() {
+  if (!isPushSubscribed.value) {
+    showToast('Vui lòng bấm nút "Kích hoạt Web Push" trên màn hình chính trước để cấp quyền!', 'info');
+    return;
+  }
+
   try {
     showToast('Đang gửi thông báo đổ rác thử nghiệm...', 'info');
     const result = await api.sendTestTrashNotification();
     if (result.success) {
       showToast('Đã gửi thông báo đổ rác thử nghiệm thành công!', 'success');
+    } else {
+      showToast(result.error || 'Lỗi gửi test thông báo đổ rác', 'error');
     }
   } catch (err: unknown) {
     showToast((err as Error)?.message || 'Lỗi gửi test thông báo đổ rác', 'error');

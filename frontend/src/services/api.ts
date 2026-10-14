@@ -187,12 +187,15 @@ export async function sendTestNotification(): Promise<{ success: boolean; messag
   return res.json();
 }
 
-export async function sendTestTrashNotification(): Promise<{ success: boolean; sent?: number }> {
+export async function sendTestTrashNotification(): Promise<{ success: boolean; sent?: number; error?: string }> {
   const res = await fetch(`${API_BASE}/push/test-trash`, {
     method: 'POST',
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Lỗi gửi test thông báo đổ rác');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Lỗi gửi test thông báo đổ rác');
+  }
   return res.json();
 }
 

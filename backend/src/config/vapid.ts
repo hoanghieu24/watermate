@@ -12,6 +12,12 @@ interface VapidKeys {
 
 const keyFilePath = path.resolve(process.cwd(), 'data', 'vapid.json');
 
+// Stable default VAPID key pair to ensure subscriptions remain valid across ephemeral container restarts (Render)
+const DEFAULT_VAPID_KEYS: VapidKeys = {
+  publicKey: 'BPmSJ7vaW6tPLhIJlC6ntO5z3HnzFEozxR2zLuYfOF15P8YdGqsOLQt2hVl0y1eIz5PtuooP1EloTnkJO4lnP2g',
+  privateKey: 'o2BesBoUNjKr559NindXjTTNP-zs3Ld6CARpZQP1KzE',
+};
+
 function getOrGenerateKeys(): VapidKeys {
   // 1. Check environment variables
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -29,19 +35,22 @@ function getOrGenerateKeys(): VapidKeys {
         return saved;
       }
     } catch {
-      // ignore and generate
+      // ignore
     }
   }
 
-  // 3. Generate new VAPID keys and persist
-  const generated = webpush.generateVAPIDKeys();
-  const dir = path.dirname(keyFilePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  // 3. Persist stable default keys so subscriptions don't get invalidated on container redeploy
+  try {
+    const dir = path.dirname(keyFilePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(keyFilePath, JSON.stringify(DEFAULT_VAPID_KEYS, null, 2), 'utf-8');
+  } catch {
+    // ignore
   }
-  fs.writeFileSync(keyFilePath, JSON.stringify(generated, null, 2), 'utf-8');
-  console.log('Generated and saved new VAPID keys to data/vapid.json');
-  return generated;
+
+  return DEFAULT_VAPID_KEYS;
 }
 
 const keys = getOrGenerateKeys();
