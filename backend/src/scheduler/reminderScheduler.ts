@@ -10,6 +10,9 @@ interface ReminderSettingsRow {
   event_auto_delete?: number | boolean;
   trash_enabled?: number | boolean;
   trash_days?: string;
+  trash_mode?: string;
+  trash_interval_days?: number;
+  trash_start_date?: string;
   trash_time?: string;
   trash_message?: string;
   last_trash_notified_date?: string | null;
@@ -304,7 +307,7 @@ export async function evaluateEventReminders(): Promise<void> {
   }
 }
 
-// 3. Trash Reminder (Tắt bật thông báo lịch đổ rác)
+// 3. Trash Reminder (Tắt bật thông báo lịch đổ rác theo ngày, không theo thứ)
 export async function evaluateTrashReminders(): Promise<void> {
   const activeSettings = await dbQuery<ReminderSettingsRow>(`
     SELECT * FROM reminder_settings
@@ -325,7 +328,7 @@ export async function evaluateTrashReminders(): Promise<void> {
     month: '2-digit',
     day: '2-digit',
   });
-  const todayStr = dateFormatter.format(now);
+  const todayStr = dateFormatter.format(now); // "YYYY-MM-DD"
 
   // Format current time in HH:mm
   const timeFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -336,22 +339,11 @@ export async function evaluateTrashReminders(): Promise<void> {
   });
   const currentTimeStr = timeFormatter.format(now); // "HH:mm"
 
-  // Day of week in Asia/Ho_Chi_Minh: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  const dayFormatter = new Intl.DateTimeFormat('en-US', {
+  // Day of month in Asia/Ho_Chi_Minh: 1 to 31
+  const dayOfMonth = Number(new Intl.DateTimeFormat('en-GB', {
     timeZone: tz,
-    weekday: 'short',
-  });
-  const dayShort = dayFormatter.format(now); // "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-  const dayMap: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  const currentDayOfWeek = dayMap[dayShort] !== undefined ? dayMap[dayShort] : now.getDay();
+    day: 'numeric',
+  }).format(now));
 
   for (const s of activeSettings) {
     // Check if already notified today
@@ -365,18 +357,42 @@ export async function evaluateTrashReminders(): Promise<void> {
       continue;
     }
 
-    // Check days configured: e.g. "1,3,5" (T2, T4, T6)
-    const configuredDays = (s.trash_days || '1,3,5')
-      .split(',')
-      .map((item) => Number(item.trim()))
-      .filter((n) => !isNaN(n));
+    let isTrashDay = false;
 
-    if (configuredDays.includes(currentDayOfWeek)) {
-      console.log(`[TrashScheduler] Triggering trash reminder for setting #${s.id} at ${currentTimeStr}`);
+    if (s.trash_mode === 'interval') {
+      const interval = Math.max(1, Number(s.trash_interval_days) || 1);
+      if (interval === 1) {
+        // Every single day
+        isTrashDay = true;
+      } else {
+        const startDate = s.trash_start_date || '2026-01-01';
+        const [sY, sM, sD] = startDate.split('-').map(Number);
+        const [tY, tM, tD] = todayStr.split('-').map(Number);
+        const startUtc = Date.UTC(sY, sM - 1, sD);
+        const todayUtc = Date.UTC(tY, tM - 1, tD);
+        const diff = Math.round((todayUtc - startUtc) / (1000 * 60 * 60 * 24));
+        if (diff >= 0 && diff % interval === 0) {
+          isTrashDay = true;
+        }
+      }
+    } else {
+      // Days of month mode: check if today's day of month is in trash_days (1-31)
+      const configuredDays = (s.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31')
+        .split(',')
+        .map((item) => Number(item.trim()))
+        .filter((n) => !isNaN(n));
+
+      if (configuredDays.includes(dayOfMonth)) {
+        isTrashDay = true;
+      }
+    }
+
+    if (isTrashDay) {
+      console.log(`[TrashScheduler] Triggering trash reminder by date for setting #${s.id} on day ${dayOfMonth} at ${currentTimeStr}`);
 
       const payload = {
         title: 'WaterMate - Lịch đổ rác hôm nay! 🗑️',
-        body: s.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để giữ nhà cửa sạch sẽ nhé.',
+        body: s.trash_message || `🗑️ Hôm nay ngày ${dayOfMonth}, đến giờ đổ rác rồi! Gom rác mang đi đổ để giữ nhà sạch sẽ nhé.`,
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
         url: '/?tab=trash',

@@ -300,7 +300,7 @@
                 </div>
                 <div>
                   <h5 class="text-xs font-bold text-slate-800">3. Thông báo lịch đổ rác</h5>
-                  <p class="text-[10px] text-slate-400">Nhắc gom và đổ rác theo các ngày trong tuần</p>
+                  <p class="text-[10px] text-slate-400">Nhắc đổ rác theo ngày (chẵn, lẻ, chu kỳ hoặc ngày trong tháng)</p>
                 </div>
               </div>
 
@@ -313,31 +313,79 @@
 
             <!-- Details when trash reminder is enabled -->
             <div v-if="formSettings.trash_enabled" class="space-y-3 pt-2 border-t border-emerald-100/70">
-              <!-- Days of week selection -->
+              
+              <!-- Quick Presets -->
               <div>
-                <label class="block text-[10px] font-bold text-slate-600 mb-1.5">Chọn các ngày đổ rác trong tuần:</label>
-                <div class="grid grid-cols-7 gap-1">
+                <label class="block text-[10px] font-bold text-slate-600 mb-1.5">Chọn nhanh lịch nhắc theo ngày:</label>
+                <div class="grid grid-cols-3 gap-1.5 mb-1.5">
                   <button
-                    v-for="d in [
-                      { label: 'T2', val: 1 },
-                      { label: 'T3', val: 2 },
-                      { label: 'T4', val: 3 },
-                      { label: 'T5', val: 4 },
-                      { label: 'T6', val: 5 },
-                      { label: 'T7', val: 6 },
-                      { label: 'CN', val: 0 }
-                    ]"
-                    :key="d.val"
                     type="button"
-                    @click="toggleTrashDay(d.val)"
-                    class="py-1.5 text-[10px] font-black rounded-lg border transition-all text-center"
-                    :class="selectedTrashDays.includes(d.val)
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'"
+                    @click="applyTrashPreset('every_day')"
+                    class="py-1.5 px-1 rounded-xl text-[10px] font-bold border transition-all text-center"
+                    :class="trashPreset === 'every_day' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
                   >
-                    {{ d.label }}
+                    Mỗi ngày
+                  </button>
+                  <button
+                    type="button"
+                    @click="applyTrashPreset('every_2_days')"
+                    class="py-1.5 px-1 rounded-xl text-[10px] font-bold border transition-all text-center"
+                    :class="trashPreset === 'every_2_days' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                  >
+                    2 ngày / lần
+                  </button>
+                  <button
+                    type="button"
+                    @click="applyTrashPreset('every_3_days')"
+                    class="py-1.5 px-1 rounded-xl text-[10px] font-bold border transition-all text-center"
+                    :class="trashPreset === 'every_3_days' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                  >
+                    3 ngày / lần
                   </button>
                 </div>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    @click="applyTrashPreset('even')"
+                    class="py-1.5 px-1 rounded-xl text-[10px] font-bold border transition-all text-center"
+                    :class="trashPreset === 'even' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                  >
+                    Ngày chẵn (2, 4, 6...)
+                  </button>
+                  <button
+                    type="button"
+                    @click="applyTrashPreset('odd')"
+                    class="py-1.5 px-1 rounded-xl text-[10px] font-bold border transition-all text-center"
+                    :class="trashPreset === 'odd' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                  >
+                    Ngày lẻ (1, 3, 5...)
+                  </button>
+                </div>
+              </div>
+
+              <!-- Days of Month Grid (1 to 31) -->
+              <div class="bg-white/80 p-2.5 rounded-2xl border border-emerald-100 space-y-1.5">
+                <div class="flex items-center justify-between text-[10px] font-bold text-slate-600">
+                  <span>Hoặc chọn ngày cụ thể trong tháng (1 - 31):</span>
+                  <span class="text-emerald-700 font-extrabold">{{ selectedTrashDays.length }} ngày</span>
+                </div>
+                <div class="grid grid-cols-7 gap-1">
+                  <button
+                    v-for="d in 31"
+                    :key="d"
+                    type="button"
+                    @click="toggleTrashDay(d)"
+                    class="w-full h-7 rounded-lg text-[10px] font-extrabold border transition-all flex items-center justify-center"
+                    :class="selectedTrashDays.includes(d)
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm scale-100'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'"
+                  >
+                    {{ d }}
+                  </button>
+                </div>
+                <p class="text-[10px] text-slate-500 font-medium italic pt-0.5">
+                  {{ trashDaysSummaryText }}
+                </p>
               </div>
 
               <!-- Time of day -->
@@ -354,7 +402,7 @@
                   <button
                     type="button"
                     @click="$emit('test-trash')"
-                    class="w-full py-2 px-2 rounded-xl bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 text-[10px] font-bold active:scale-95 transition-all flex items-center justify-center gap-1"
+                    class="w-full py-2 px-2 rounded-xl bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 text-[10px] font-bold active:scale-95 transition-all flex items-center justify-center gap-1 shadow-sm"
                   >
                     <Send class="w-3 h-3" />
                     <span>Test báo đổ rác</span>
@@ -433,7 +481,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import type { UserPreferences, ReminderSettings, User } from '../types';
 import {
   Settings,
@@ -476,20 +524,58 @@ const formSettings = ref<ReminderSettings>({
   event_enabled: props.settings.event_enabled !== undefined ? props.settings.event_enabled : true,
   event_auto_delete: props.settings.event_auto_delete !== undefined ? props.settings.event_auto_delete : true,
   trash_enabled: props.settings.trash_enabled !== undefined ? props.settings.trash_enabled : false,
-  trash_days: props.settings.trash_days || '1,3,5',
+  trash_days: props.settings.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+  trash_mode: props.settings.trash_mode || 'days_of_month',
+  trash_interval_days: props.settings.trash_interval_days || 1,
   trash_time: props.settings.trash_time || '19:00',
   trash_message: props.settings.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
 });
 
-// Selected trash days helper
+// Selected trash days helper (days of month 1 to 31)
 const selectedTrashDays = ref<number[]>(
-  (formSettings.value.trash_days || '1,3,5')
+  (formSettings.value.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31')
     .split(',')
     .map(Number)
-    .filter((n) => !isNaN(n))
+    .filter((n) => !isNaN(n) && n >= 1 && n <= 31)
 );
 
+const trashPreset = ref<'every_day' | 'every_2_days' | 'every_3_days' | 'even' | 'odd' | 'custom'>('custom');
+
+// Detect initial preset
+if (selectedTrashDays.value.length === 31) {
+  trashPreset.value = 'every_day';
+} else if (selectedTrashDays.value.length === 15 && selectedTrashDays.value.every(d => d % 2 === 0)) {
+  trashPreset.value = 'even';
+} else if (selectedTrashDays.value.length === 16 && selectedTrashDays.value.every(d => d % 2 === 1)) {
+  trashPreset.value = 'odd';
+}
+
+function applyTrashPreset(preset: 'every_day' | 'every_2_days' | 'every_3_days' | 'even' | 'odd') {
+  trashPreset.value = preset;
+  if (preset === 'every_day') {
+    selectedTrashDays.value = Array.from({ length: 31 }, (_, i) => i + 1);
+    formSettings.value.trash_mode = 'interval';
+    formSettings.value.trash_interval_days = 1;
+  } else if (preset === 'every_2_days') {
+    selectedTrashDays.value = Array.from({ length: 31 }, (_, i) => i + 1).filter(n => n % 2 === 1);
+    formSettings.value.trash_mode = 'interval';
+    formSettings.value.trash_interval_days = 2;
+  } else if (preset === 'every_3_days') {
+    selectedTrashDays.value = Array.from({ length: 31 }, (_, i) => i + 1).filter(n => n % 3 === 1);
+    formSettings.value.trash_mode = 'interval';
+    formSettings.value.trash_interval_days = 3;
+  } else if (preset === 'even') {
+    selectedTrashDays.value = Array.from({ length: 31 }, (_, i) => i + 1).filter(n => n % 2 === 0);
+    formSettings.value.trash_mode = 'days_of_month';
+  } else if (preset === 'odd') {
+    selectedTrashDays.value = Array.from({ length: 31 }, (_, i) => i + 1).filter(n => n % 2 === 1);
+    formSettings.value.trash_mode = 'days_of_month';
+  }
+  formSettings.value.trash_days = selectedTrashDays.value.join(',');
+}
+
 function toggleTrashDay(dayVal: number) {
+  trashPreset.value = 'custom';
   if (selectedTrashDays.value.includes(dayVal)) {
     if (selectedTrashDays.value.length > 1) {
       selectedTrashDays.value = selectedTrashDays.value.filter((d) => d !== dayVal);
@@ -497,8 +583,16 @@ function toggleTrashDay(dayVal: number) {
   } else {
     selectedTrashDays.value = [...selectedTrashDays.value, dayVal].sort((a, b) => a - b);
   }
+  formSettings.value.trash_mode = 'days_of_month';
   formSettings.value.trash_days = selectedTrashDays.value.join(',');
 }
+
+const trashDaysSummaryText = computed(() => {
+  if (selectedTrashDays.value.length === 31) return '🔔 Sẽ nhắc đổ rác hằng ngày.';
+  if (selectedTrashDays.value.length === 15 && selectedTrashDays.value.every(d => d % 2 === 0)) return '🔔 Sẽ nhắc vào các ngày chẵn trong tháng.';
+  if (selectedTrashDays.value.length === 16 && selectedTrashDays.value.every(d => d % 2 === 1)) return '🔔 Sẽ nhắc vào các ngày lẻ trong tháng.';
+  return `🔔 Sẽ nhắc vào ${selectedTrashDays.value.length} ngày trong tháng: ${selectedTrashDays.value.join(', ')}.`;
+});
 
 function save() {
   formSettings.value.trash_days = selectedTrashDays.value.join(',');

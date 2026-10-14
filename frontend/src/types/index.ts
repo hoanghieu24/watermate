@@ -35,9 +35,12 @@ export interface ReminderSettings {
   event_enabled?: boolean;
   event_auto_delete?: boolean;
 
-  // 3. Trash Reminder (Tắt bật thông báo lịch đổ rác)
+  // 3. Trash Reminder (Tắt bật thông báo lịch đổ rác theo ngày, không theo thứ)
   trash_enabled?: boolean;
-  trash_days?: string; // e.g. "1,3,5" (0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7)
+  trash_mode?: 'days_of_month' | 'interval';
+  trash_interval_days?: number;
+  trash_start_date?: string;
+  trash_days?: string; // Comma-separated days of month (1-31), e.g. "1,3,5,7,9..."
   trash_time?: string; // e.g. "19:00"
   trash_message?: string;
   last_trash_notified_date?: string | null;

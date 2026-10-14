@@ -169,8 +169,10 @@ export async function initDb(): Promise<void> {
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS water_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_auto_delete BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
-    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_enabled BOOLEAN NOT NULL DEFAULT FALSE;'); } catch {}
-    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_days VARCHAR(50) NOT NULL DEFAULT '1,3,5';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_days VARCHAR(255) NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_mode VARCHAR(20) NOT NULL DEFAULT 'days_of_month';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_interval_days INTEGER NOT NULL DEFAULT 1;"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_start_date VARCHAR(20);"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_time VARCHAR(10) NOT NULL DEFAULT '19:00';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.';"); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS last_trash_notified_date VARCHAR(20);'); } catch {}
@@ -246,8 +248,10 @@ export async function initDb(): Promise<void> {
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN water_enabled INTEGER NOT NULL DEFAULT 1;'); } catch {}
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN event_enabled INTEGER NOT NULL DEFAULT 1;'); } catch {}
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN event_auto_delete INTEGER NOT NULL DEFAULT 1;'); } catch {}
-    try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN trash_enabled INTEGER NOT NULL DEFAULT 0;'); } catch {}
-    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_days TEXT NOT NULL DEFAULT '1,3,5';"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_mode TEXT NOT NULL DEFAULT 'days_of_month';"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_interval_days INTEGER NOT NULL DEFAULT 1;"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_start_date TEXT;"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_days TEXT NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_time TEXT NOT NULL DEFAULT '19:00';"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.';"); } catch {}
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN last_trash_notified_date TEXT;'); } catch {}

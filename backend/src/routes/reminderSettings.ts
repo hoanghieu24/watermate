@@ -11,6 +11,9 @@ export interface DbReminderSettings {
   event_auto_delete?: number | boolean;
   trash_enabled?: number | boolean;
   trash_days?: string;
+  trash_mode?: string;
+  trash_interval_days?: number;
+  trash_start_date?: string;
   trash_time?: string;
   trash_message?: string;
   last_trash_notified_date?: string | null;
@@ -40,18 +43,21 @@ reminderSettingsRouter.get('/', async (req: Request, res: Response) => {
           await dbRun(`
             INSERT INTO reminder_settings (
               enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled,
-              trash_days, trash_time, trash_message, user_id, start_time, end_time,
+              trash_days, trash_mode, trash_interval_days, trash_start_date, trash_time, trash_message, user_id, start_time, end_time,
               interval_minutes, timezone, notification_message, quiet_hours_enabled,
               quiet_start_time, quiet_end_time
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             fallback.enabled ? 1 : 0,
             fallback.water_enabled !== undefined ? (fallback.water_enabled ? 1 : 0) : 1,
             fallback.event_enabled !== undefined ? (fallback.event_enabled ? 1 : 0) : 1,
             fallback.event_auto_delete !== undefined ? (fallback.event_auto_delete ? 1 : 0) : 1,
             fallback.trash_enabled !== undefined ? (fallback.trash_enabled ? 1 : 0) : 0,
-            fallback.trash_days || '1,3,5',
+            fallback.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+            fallback.trash_mode || 'days_of_month',
+            fallback.trash_interval_days || 1,
+            fallback.trash_start_date || '2026-01-01',
             fallback.trash_time || '19:00',
             fallback.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
             req.userId,
@@ -84,7 +90,10 @@ reminderSettingsRouter.get('/', async (req: Request, res: Response) => {
       event_enabled: row.event_enabled !== undefined ? Boolean(row.event_enabled) : true,
       event_auto_delete: row.event_auto_delete !== undefined ? Boolean(row.event_auto_delete) : true,
       trash_enabled: row.trash_enabled !== undefined ? Boolean(row.trash_enabled) : false,
-      trash_days: row.trash_days || '1,3,5',
+      trash_days: row.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+      trash_mode: row.trash_mode || 'days_of_month',
+      trash_interval_days: Number(row.trash_interval_days) || 1,
+      trash_start_date: row.trash_start_date || '2026-01-01',
       trash_time: row.trash_time || '19:00',
       trash_message: row.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
       quiet_hours_enabled: Boolean(row.quiet_hours_enabled),
@@ -105,6 +114,9 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
       event_auto_delete,
       trash_enabled,
       trash_days,
+      trash_mode,
+      trash_interval_days,
+      trash_start_date,
       trash_time,
       trash_message,
       start_time,
@@ -131,7 +143,10 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
     const newEventEnabled = event_enabled !== undefined ? (event_enabled ? 1 : 0) : (current?.event_enabled !== undefined ? (current.event_enabled ? 1 : 0) : 1);
     const newEventAutoDelete = event_auto_delete !== undefined ? (event_auto_delete ? 1 : 0) : (current?.event_auto_delete !== undefined ? (current.event_auto_delete ? 1 : 0) : 1);
     const newTrashEnabled = trash_enabled !== undefined ? (trash_enabled ? 1 : 0) : (current?.trash_enabled ? 1 : 0);
-    const newTrashDays = String(trash_days || current?.trash_days || '1,3,5');
+    const newTrashDays = String(trash_days || current?.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31');
+    const newTrashMode = String(trash_mode || current?.trash_mode || 'days_of_month');
+    const newTrashInterval = Number(trash_interval_days) || current?.trash_interval_days || 1;
+    const newTrashStartDate = String(trash_start_date || current?.trash_start_date || '2026-01-01');
     const newTrashTime = String(trash_time || current?.trash_time || '19:00');
     const newTrashMessage = String(trash_message || current?.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.');
 
@@ -151,14 +166,14 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
         await dbRun(`
           UPDATE reminder_settings
           SET enabled = ?, water_enabled = ?, event_enabled = ?, event_auto_delete = ?,
-              trash_enabled = ?, trash_days = ?, trash_time = ?, trash_message = ?,
+              trash_enabled = ?, trash_days = ?, trash_mode = ?, trash_interval_days = ?, trash_start_date = ?, trash_time = ?, trash_message = ?,
               start_time = ?, end_time = ?, interval_minutes = ?, timezone = ?,
               notification_message = ?, paused_until = ?, quiet_hours_enabled = ?,
               quiet_start_time = ?, quiet_end_time = ?
           WHERE user_id = ?
         `, [
           newEnabled, newWaterEnabled, newEventEnabled, newEventAutoDelete,
-          newTrashEnabled, newTrashDays, newTrashTime, newTrashMessage,
+          newTrashEnabled, newTrashDays, newTrashMode, newTrashInterval, newTrashStartDate, newTrashTime, newTrashMessage,
           newStartTime, newEndTime, newInterval, newTimezone,
           newMsg, newPausedUntil, newQuietEnabled,
           newQuietStart, newQuietEnd,
@@ -168,15 +183,15 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
         await dbRun(`
           INSERT INTO reminder_settings (
             enabled, water_enabled, event_enabled, event_auto_delete,
-            trash_enabled, trash_days, trash_time, trash_message, user_id,
+            trash_enabled, trash_days, trash_mode, trash_interval_days, trash_start_date, trash_time, trash_message, user_id,
             start_time, end_time, interval_minutes, timezone,
             notification_message, paused_until, quiet_hours_enabled,
             quiet_start_time, quiet_end_time
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           newEnabled, newWaterEnabled, newEventEnabled, newEventAutoDelete,
-          newTrashEnabled, newTrashDays, newTrashTime, newTrashMessage, req.userId,
+          newTrashEnabled, newTrashDays, newTrashMode, newTrashInterval, newTrashStartDate, newTrashTime, newTrashMessage, req.userId,
           newStartTime, newEndTime, newInterval, newTimezone,
           newMsg, newPausedUntil, newQuietEnabled,
           newQuietStart, newQuietEnd
@@ -186,14 +201,14 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
       await dbRun(`
         UPDATE reminder_settings
         SET enabled = ?, water_enabled = ?, event_enabled = ?, event_auto_delete = ?,
-            trash_enabled = ?, trash_days = ?, trash_time = ?, trash_message = ?,
+            trash_enabled = ?, trash_days = ?, trash_mode = ?, trash_interval_days = ?, trash_start_date = ?, trash_time = ?, trash_message = ?,
             start_time = ?, end_time = ?, interval_minutes = ?, timezone = ?,
             notification_message = ?, paused_until = ?, quiet_hours_enabled = ?,
             quiet_start_time = ?, quiet_end_time = ?
         WHERE id = 1
       `, [
         newEnabled, newWaterEnabled, newEventEnabled, newEventAutoDelete,
-        newTrashEnabled, newTrashDays, newTrashTime, newTrashMessage,
+        newTrashEnabled, newTrashDays, newTrashMode, newTrashInterval, newTrashStartDate, newTrashTime, newTrashMessage,
         newStartTime, newEndTime, newInterval, newTimezone,
         newMsg, newPausedUntil, newQuietEnabled,
         newQuietStart, newQuietEnd,
@@ -211,7 +226,10 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
       event_enabled: Boolean(saved?.event_enabled),
       event_auto_delete: Boolean(saved?.event_auto_delete),
       trash_enabled: Boolean(saved?.trash_enabled),
-      trash_days: saved?.trash_days || '1,3,5',
+      trash_days: saved?.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+      trash_mode: saved?.trash_mode || 'days_of_month',
+      trash_interval_days: Number(saved?.trash_interval_days) || 1,
+      trash_start_date: saved?.trash_start_date || '2026-01-01',
       trash_time: saved?.trash_time || '19:00',
       trash_message: saved?.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
       quiet_hours_enabled: Boolean(saved?.quiet_hours_enabled),
