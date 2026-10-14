@@ -385,6 +385,41 @@ export async function initDb(): Promise<void> {
       `);
       console.log(`[Data Privacy] All legacy data successfully moved to private account 'hieu' (${hieuId}).`);
     }
+
+    // Guarantee user 'huyen' exists
+    let huyen = await dbGet<{ id: string }>('SELECT id FROM users WHERE username = ?', ['huyen']);
+    if (!huyen) {
+      const crypto = await import('crypto');
+      const salt = crypto.randomBytes(16).toString('hex');
+      const passwordHash = crypto.pbkdf2Sync('123456', salt, 100000, 64, 'sha512').toString('hex');
+      const huyenId = `usr_huyen_${Date.now()}`;
+      await dbRun(
+        'INSERT INTO users (id, username, password_hash, salt, created_at) VALUES (?, ?, ?, ?, ?)',
+        [huyenId, 'huyen', passwordHash, salt, new Date().toISOString()]
+      );
+      huyen = { id: huyenId };
+    }
+
+    if (huyen?.id) {
+      const huyenSettings = await dbGet('SELECT id FROM reminder_settings WHERE user_id = ?', [huyen.id]);
+      if (!huyenSettings) {
+        await dbRun(`
+          INSERT INTO reminder_settings (
+            enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled,
+            trash_days, trash_mode, trash_interval_days, trash_start_date, trash_time,
+            trash_message, user_id, start_time, end_time, interval_minutes, timezone,
+            notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time
+          )
+          VALUES (
+            1, 1, 1, 1, 0,
+            '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', 'days_of_month', 1, '2026-01-01', '19:00',
+            '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+            ?, '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh',
+            '💧 Huyền ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', 0, '12:00', '13:30'
+          )
+        `, [huyen.id]);
+      }
+    }
   } catch (privErr) {
     console.warn('Private data migration error:', privErr);
   }
