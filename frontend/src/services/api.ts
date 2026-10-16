@@ -187,14 +187,31 @@ export async function sendTestNotification(): Promise<{ success: boolean; messag
   return res.json();
 }
 
-export async function sendTestTrashNotification(): Promise<{ success: boolean; sent?: number; error?: string }> {
+export async function sendTestTrashNotification(message?: string): Promise<{ success: boolean; sent?: number; error?: string }> {
   const res = await fetch(`${API_BASE}/push/test-trash`, {
     method: 'POST',
     headers: getHeaders(),
+    body: JSON.stringify({ message }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || 'Lỗi gửi test thông báo đổ rác');
+  }
+  return res.json();
+}
+
+export async function sendCustomTestNotification(
+  message: string,
+  title?: string
+): Promise<{ success: boolean; sent?: number; failed?: number; total?: number; error?: string }> {
+  const res = await fetch(`${API_BASE}/push/test-custom`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ title, message }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Lỗi gửi thông báo test tùy chỉnh');
   }
   return res.json();
 }

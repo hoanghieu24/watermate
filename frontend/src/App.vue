@@ -62,6 +62,7 @@
         @add-full-cup="handleAddFullCup"
         @open-custom="showCustomModal = true"
         @undo="handleUndo"
+        @test-custom="handleTestCustom"
       />
 
       <!-- History List -->
@@ -125,6 +126,7 @@
       @request-push="handleRequestPush"
       @test-push="handleTestPush"
       @test-trash="handleTestTrash"
+      @test-custom="handleTestCustom"
       @open-auth="showSettingsModal = false; showAuthModal = true"
       @open-events="showSettingsModal = false; showEventsModal = true"
     />
@@ -530,7 +532,7 @@ async function handleTestPush() {
   }
 }
 
-async function handleTestTrash() {
+async function handleTestTrash(customMessage?: string) {
   if (!isPushSubscribed.value) {
     showToast('Vui lòng bấm nút "Kích hoạt Web Push" trên màn hình chính trước để cấp quyền!', 'info');
     return;
@@ -538,7 +540,7 @@ async function handleTestTrash() {
 
   try {
     showToast('Đang gửi thông báo đổ rác thử nghiệm...', 'info');
-    const result = await api.sendTestTrashNotification();
+    const result = await api.sendTestTrashNotification(customMessage);
     if (result.success) {
       showToast('Đã gửi thông báo đổ rác thử nghiệm thành công!', 'success');
     } else {
@@ -547,6 +549,72 @@ async function handleTestTrash() {
   } catch (err: unknown) {
     showToast((err as Error)?.message || 'Lỗi gửi test thông báo đổ rác', 'error');
   }
+}
+
+async function handleTestCustom(payload: { title?: string; message: string }) {
+  const customBody = payload.message?.trim();
+  const customTitle = payload.title?.trim() || 'WaterMate - Thông báo! 🔔';
+
+  if (!customBody) {
+    showToast('Vui lòng nhập nội dung thông báo trước khi ấn Test!', 'error');
+    return;
+  }
+
+  // Try sending via Web Push backend first if subscribed
+  if (isPushSubscribed.value) {
+    try {
+      showToast('Đang gửi thông báo test của bạn...', 'info');
+      const result = await api.sendCustomTestNotification(customBody, customTitle);
+      if (result.success) {
+        showToast(`Đã gửi thông báo: "${customBody}"`, 'success');
+        return;
+      }
+    } catch (err: unknown) {
+      showToast((err as Error)?.message || 'Lỗi gửi thông báo qua Web Push', 'error');
+      return;
+    }
+  }
+
+  // Fallback: if Web Push isn't subscribed on this device yet, try backend anyway or local browser notification
+  try {
+    const result = await api.sendCustomTestNotification(customBody, customTitle);
+    if (result.success) {
+      showToast(`Đã gửi thông báo tới thiết bị đăng ký: "${customBody}"`, 'success');
+      return;
+    }
+  } catch {
+    // Fallback to local Notification API + in-app toast
+  }
+
+  if ('Notification' in window) {
+    try {
+      let perm = Notification.permission;
+      if (perm === 'default') {
+        perm = await Notification.requestPermission();
+      }
+      if (perm === 'granted') {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          await reg.showNotification(customTitle, {
+            body: customBody,
+            icon: '/icons/icon-192.png',
+            badge: '/icons/icon-192.png',
+          });
+        } else {
+          new Notification(customTitle, {
+            body: customBody,
+            icon: '/icons/icon-192.png',
+          });
+        }
+        showToast(`🔔 ${customBody}`, 'success');
+        return;
+      }
+    } catch {
+      // ignore local notification error
+    }
+  }
+
+  showToast(`🔔 [Test] ${customTitle}: ${customBody} (Hãy bấm "Kích hoạt Web Push" trong Cài đặt để nhận thông báo hệ thống)`, 'info');
 }
 
 // Event Reminders Handlers

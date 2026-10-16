@@ -401,7 +401,7 @@
                 <div class="flex items-end">
                   <button
                     type="button"
-                    @click="$emit('test-trash')"
+                    @click="$emit('test-trash', formSettings.trash_message)"
                     class="w-full py-2 px-2 rounded-xl bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 text-[10px] font-bold active:scale-95 transition-all flex items-center justify-center gap-1 shadow-sm"
                   >
                     <Send class="w-3 h-3" />
@@ -420,6 +420,51 @@
                   class="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-800"
                 />
               </div>
+            </div>
+          </div>
+
+          <!-- ================= REMINDER 4: CUSTOM TEST NOTIFICATION ================= -->
+          <div class="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2.5">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center">
+                <MessageSquarePlus class="w-4 h-4" />
+              </div>
+              <div>
+                <h5 class="text-xs font-bold text-slate-800">4. Test thông báo (Tự ghi nội dung)</h5>
+                <p class="text-[10px] text-slate-500">Nhập nội dung bất kỳ và ấn gửi để nhận thông báo ngay</p>
+              </div>
+            </div>
+
+            <div class="space-y-2 pt-1">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-1">Tiêu đề thông báo (tùy chọn)</label>
+                <input
+                  type="text"
+                  v-model="customTestTitle"
+                  placeholder="WaterMate - Thông báo! 🔔"
+                  class="w-full bg-white border border-amber-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-1">Nội dung thông báo tự ghi</label>
+                <textarea
+                  v-model="customTestMessage"
+                  rows="2"
+                  placeholder="Nhập nội dung bạn muốn hiển thị trên thông báo..."
+                  class="w-full bg-white border border-amber-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-amber-400 resize-none"
+                  @keydown.ctrl.enter="triggerCustomTest"
+                ></textarea>
+              </div>
+
+              <button
+                type="button"
+                @click="triggerCustomTest"
+                class="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                <Send class="w-3.5 h-3.5" />
+                <span>Ấn Test Thông Báo Ngay</span>
+              </button>
             </div>
           </div>
 
@@ -494,7 +539,8 @@ import {
   CalendarDays,
   Trash2,
   Cloud,
-  Smartphone
+  Smartphone,
+  MessageSquarePlus
 } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -512,10 +558,21 @@ const emit = defineEmits<{
   (e: 'resume'): void;
   (e: 'request-push'): void;
   (e: 'test-push'): void;
-  (e: 'test-trash'): void;
+  (e: 'test-trash', message?: string): void;
+  (e: 'test-custom', payload: { title?: string; message: string }): void;
   (e: 'open-auth'): void;
   (e: 'open-events'): void;
 }>();
+
+const customTestTitle = ref('WaterMate - Thông báo! 🔔');
+const customTestMessage = ref('');
+
+function triggerCustomTest() {
+  emit('test-custom', {
+    title: customTestTitle.value,
+    message: customTestMessage.value,
+  });
+}
 
 const formPrefs = ref<UserPreferences>({ ...props.preferences });
 const formSettings = ref<ReminderSettings>({

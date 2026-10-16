@@ -26,8 +26,68 @@ pushRouter.post('/subscribe', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/push/test-custom
+pushRouter.post('/test-custom', async (req: Request, res: Response) => {
+  try {
+    const { title, message } = req.body || {};
+    const customBody =
+      typeof message === 'string' && message.trim()
+        ? message.trim()
+        : '🔔 Đây là thông báo test do bạn tự ghi nội dung!';
+    const customTitle =
+      typeof title === 'string' && title.trim()
+        ? title.trim()
+        : 'WaterMate - Thông báo! 🔔';
+
+    const activeCount = await dbGet<{ count: number | string }>(
+      'SELECT COUNT(*) as count FROM push_subscriptions WHERE is_active = TRUE'
+    );
+    const countNumber = Number(activeCount?.count || 0);
+
+    if (countNumber === 0) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Chưa có thiết bị nào đăng ký nhận Web Push. Hãy bấm nút "Kích hoạt Web Push" trên thiết bị của bạn trước!',
+      });
+    }
+
+    const payload = {
+      title: customTitle,
+      body: customBody,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      url: '/',
+    };
+
+    const result = await sendNotificationToAll(payload, 'test');
+
+    if (result.total > 0 && result.sent === 0) {
+      const firstErr =
+        result.errors && result.errors.length > 0 ? result.errors[0] : 'Không gửi được';
+      return res.status(400).json({
+        success: false,
+        error: `Không gửi được thông báo (${firstErr}). Vui lòng bấm "Kích hoạt Web Push" để làm mới token!`,
+        ...result,
+      });
+    }
+
+    res.json({
+      success: true,
+      ...result,
+      title: customTitle,
+      body: customBody,
+    });
+  } catch (err) {
+    console.error('Error sending custom test push:', err);
+    res
+      .status(500)
+      .json({ error: (err as Error)?.message || 'Lỗi gửi thông báo tùy chỉnh thử nghiệm' });
+  }
+});
+
 // POST /api/push/test-trash
-pushRouter.post('/test-trash', async (_req: Request, res: Response) => {
+pushRouter.post('/test-trash', async (req: Request, res: Response) => {
   try {
     const activeCount = await dbGet<{ count: number | string }>('SELECT COUNT(*) as count FROM push_subscriptions WHERE is_active = TRUE');
     const countNumber = Number(activeCount?.count || 0);
@@ -39,9 +99,14 @@ pushRouter.post('/test-trash', async (_req: Request, res: Response) => {
       });
     }
 
+    const customTrashMsg =
+      typeof req.body?.message === 'string' && req.body.message.trim()
+        ? req.body.message.trim()
+        : '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để giữ nhà cửa sạch sẽ nhé.';
+
     const payload = {
       title: 'WaterMate - Lịch đổ rác hôm nay! 🗑️',
-      body: '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để giữ nhà cửa sạch sẽ nhé.',
+      body: customTrashMsg,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       url: '/?tab=trash',
