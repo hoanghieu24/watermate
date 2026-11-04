@@ -170,6 +170,15 @@ export async function initDb(): Promise<void> {
 
     // 2. Safe Column Migrations for Postgres
     try { await pgPool.query('ALTER TABLE reminder_settings DROP CONSTRAINT IF EXISTS reminder_settings_id_check;'); } catch {}
+    try {
+      await pgPool.query(`
+        CREATE SEQUENCE IF NOT EXISTS reminder_settings_id_seq;
+        SELECT setval('reminder_settings_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM reminder_settings), 0), 1));
+        ALTER TABLE reminder_settings ALTER COLUMN id SET DEFAULT nextval('reminder_settings_id_seq');
+      `);
+    } catch (seqErr) {
+      console.warn('Postgres sequence setup warning:', seqErr);
+    }
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS water_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_auto_delete BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
