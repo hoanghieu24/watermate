@@ -173,6 +173,7 @@ export async function initDb(): Promise<void> {
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS water_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_auto_delete BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
+    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_days VARCHAR(255) NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_mode VARCHAR(20) NOT NULL DEFAULT 'days_of_month';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_interval_days INTEGER NOT NULL DEFAULT 1;"); } catch {}
@@ -181,6 +182,9 @@ export async function initDb(): Promise<void> {
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.';"); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS last_trash_notified_date VARCHAR(20);'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
+    try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS quiet_hours_enabled BOOLEAN NOT NULL DEFAULT FALSE;'); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS quiet_start_time VARCHAR(10) NOT NULL DEFAULT '12:00';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS quiet_end_time VARCHAR(10) NOT NULL DEFAULT '13:30';"); } catch {}
 
     try { await pgPool.query('ALTER TABLE water_logs ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
     try { await pgPool.query('ALTER TABLE event_reminders ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}

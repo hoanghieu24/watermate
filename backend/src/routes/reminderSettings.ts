@@ -101,7 +101,7 @@ reminderSettingsRouter.get('/', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Error fetching settings:', err);
-    res.status(500).json({ error: 'Lỗi tải cài đặt nhắc nhở' });
+    res.status(500).json({ error: (err as Error)?.message || 'Lỗi tải cài đặt nhắc nhở' });
   }
 });
 
@@ -238,6 +238,6 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Error updating settings:', err);
-    res.status(500).json({ error: 'Lỗi cập nhật cài đặt nhắc nhở' });
+    res.status(500).json({ error: (err as Error)?.message || 'Lỗi cập nhật cài đặt nhắc nhở' });
   }
 });
