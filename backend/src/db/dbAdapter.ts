@@ -40,6 +40,15 @@ if (isPostgres) {
   sqliteDb = new DatabaseSync(dbPath);
 }
 
+// Normalize parameters so SQLite and PostgreSQL never crash on types
+function normalizeParamsForSqlite(params: any[]): any[] {
+  return params.map(p => (typeof p === 'boolean' ? (p ? 1 : 0) : p));
+}
+
+function normalizeParamsForPostgres(params: any[]): any[] {
+  return params.map(p => (p === undefined ? null : p));
+}
+
 // Convert SQLite '?' placeholders to Postgres '$1, $2, ...'
 function toPgSql(sql: string): string {
   let paramIndex = 1;
@@ -49,10 +58,10 @@ function toPgSql(sql: string): string {
 export async function dbQuery<T = any>(sql: string, params: any[] = []): Promise<T[]> {
   if (isPostgres && pgPool) {
     const pgSql = toPgSql(sql);
-    const result = await pgPool.query(pgSql, params);
+    const result = await pgPool.query(pgSql, normalizeParamsForPostgres(params));
     return result.rows as T[];
   } else if (sqliteDb) {
-    const rows = sqliteDb.prepare(sql).all(...params) as unknown as T[];
+    const rows = sqliteDb.prepare(sql).all(...normalizeParamsForSqlite(params)) as unknown as T[];
     return rows;
   }
   return [];
@@ -61,10 +70,10 @@ export async function dbQuery<T = any>(sql: string, params: any[] = []): Promise
 export async function dbGet<T = any>(sql: string, params: any[] = []): Promise<T | null> {
   if (isPostgres && pgPool) {
     const pgSql = toPgSql(sql);
-    const result = await pgPool.query(pgSql, params);
+    const result = await pgPool.query(pgSql, normalizeParamsForPostgres(params));
     return (result.rows[0] as T) || null;
   } else if (sqliteDb) {
-    const row = sqliteDb.prepare(sql).get(...params) as unknown as T | undefined;
+    const row = sqliteDb.prepare(sql).get(...normalizeParamsForSqlite(params)) as unknown as T | undefined;
     return row || null;
   }
   return null;
@@ -73,10 +82,10 @@ export async function dbGet<T = any>(sql: string, params: any[] = []): Promise<T
 export async function dbRun(sql: string, params: any[] = []): Promise<{ changes: number; lastInsertRowid?: any }> {
   if (isPostgres && pgPool) {
     const pgSql = toPgSql(sql);
-    const result = await pgPool.query(pgSql, params);
+    const result = await pgPool.query(pgSql, normalizeParamsForPostgres(params));
     return { changes: result.rowCount || 0 };
   } else if (sqliteDb) {
-    const result = sqliteDb.prepare(sql).run(...params);
+    const result = sqliteDb.prepare(sql).run(...normalizeParamsForSqlite(params));
     return { changes: Number(result.changes), lastInsertRowid: result.lastInsertRowid };
   }
   return { changes: 0 };
@@ -107,11 +116,22 @@ export async function initDb(): Promise<void> {
         id SERIAL PRIMARY KEY,
         enabled BOOLEAN NOT NULL DEFAULT TRUE,
         water_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        event_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        event_auto_delete BOOLEAN NOT NULL DEFAULT TRUE,
+        trash_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        trash_days VARCHAR(255) NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+        trash_mode VARCHAR(20) NOT NULL DEFAULT 'days_of_month',
+        trash_interval_days INTEGER NOT NULL DEFAULT 1,
+        trash_start_date VARCHAR(20) NOT NULL DEFAULT '2026-01-01',
+        trash_time VARCHAR(10) NOT NULL DEFAULT '06:30',
+        trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+        last_trash_notified_date VARCHAR(20),
+        user_id VARCHAR(100),
         start_time VARCHAR(10) NOT NULL DEFAULT '08:00',
         end_time VARCHAR(10) NOT NULL DEFAULT '22:00',
         interval_minutes INTEGER NOT NULL DEFAULT 60,
         timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
-        notification_message TEXT NOT NULL DEFAULT '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
+        notification_message TEXT NOT NULL DEFAULT 'Yêu ơi , chung ta cùng uống nước nè',
         paused_until TIMESTAMPTZ,
         quiet_hours_enabled BOOLEAN NOT NULL DEFAULT FALSE,
         quiet_start_time VARCHAR(10) NOT NULL DEFAULT '12:00',
@@ -156,8 +176,8 @@ export async function initDb(): Promise<void> {
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_days VARCHAR(255) NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_mode VARCHAR(20) NOT NULL DEFAULT 'days_of_month';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_interval_days INTEGER NOT NULL DEFAULT 1;"); } catch {}
-    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_start_date VARCHAR(20);"); } catch {}
-    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_time VARCHAR(10) NOT NULL DEFAULT '19:00';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_start_date VARCHAR(20) NOT NULL DEFAULT '2026-01-01';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_time VARCHAR(10) NOT NULL DEFAULT '06:30';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.';"); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS last_trash_notified_date VARCHAR(20);'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
@@ -165,6 +185,12 @@ export async function initDb(): Promise<void> {
     try { await pgPool.query('ALTER TABLE water_logs ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
     try { await pgPool.query('ALTER TABLE event_reminders ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
     try { await pgPool.query('ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);'); } catch {}
+
+    // Ensure PostgreSQL column defaults
+    try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN notification_message SET DEFAULT 'Yêu ơi , chung ta cùng uống nước nè';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN trash_enabled SET DEFAULT TRUE;"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN trash_time SET DEFAULT '06:30';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN trash_days SET DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
 
     // 3. Create Indexes after columns exist
     try { await pgPool.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);'); } catch {}
@@ -180,7 +206,7 @@ export async function initDb(): Promise<void> {
     if (existing.rowCount === 0) {
       await pgPool.query(`
         INSERT INTO reminder_settings (id, enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled, trash_days, trash_time, trash_message, start_time, end_time, interval_minutes, timezone, notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time)
-        VALUES (1, true, true, true, true, false, '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', '19:00', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.', '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh', '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', false, '12:00', '13:30')
+        VALUES (1, true, true, true, true, true, '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', '06:30', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.', '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh', 'Yêu ơi , chung ta cùng uống nước nè', false, '12:00', '13:30')
       `);
     }
 
@@ -215,7 +241,7 @@ export async function initDb(): Promise<void> {
         end_time TEXT NOT NULL DEFAULT '22:00',
         interval_minutes INTEGER NOT NULL DEFAULT 60,
         timezone TEXT NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
-        notification_message TEXT NOT NULL DEFAULT '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
+        notification_message TEXT NOT NULL DEFAULT 'Yêu ơi , chung ta cùng uống nước nè',
         paused_until TEXT,
         quiet_hours_enabled INTEGER NOT NULL DEFAULT 0,
         quiet_start_time TEXT NOT NULL DEFAULT '12:00',
@@ -259,12 +285,12 @@ export async function initDb(): Promise<void> {
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN water_enabled INTEGER NOT NULL DEFAULT 1;'); } catch {}
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN event_enabled INTEGER NOT NULL DEFAULT 1;'); } catch {}
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN event_auto_delete INTEGER NOT NULL DEFAULT 1;'); } catch {}
-    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_enabled INTEGER NOT NULL DEFAULT 0;"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_enabled INTEGER NOT NULL DEFAULT 1;"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_mode TEXT NOT NULL DEFAULT 'days_of_month';"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_interval_days INTEGER NOT NULL DEFAULT 1;"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_start_date TEXT;"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_days TEXT NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
-    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_time TEXT NOT NULL DEFAULT '19:00';"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_time TEXT NOT NULL DEFAULT '06:30';"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.';"); } catch {}
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN last_trash_notified_date TEXT;'); } catch {}
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN user_id TEXT;'); } catch {}
@@ -286,12 +312,12 @@ export async function initDb(): Promise<void> {
             water_enabled INTEGER DEFAULT 1,
             event_enabled INTEGER DEFAULT 1,
             event_auto_delete INTEGER DEFAULT 1,
-            trash_enabled INTEGER DEFAULT 0,
+            trash_enabled INTEGER DEFAULT 1,
             trash_mode TEXT DEFAULT 'days_of_month',
             trash_interval_days INTEGER DEFAULT 1,
             trash_start_date TEXT,
             trash_days TEXT DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
-            trash_time TEXT DEFAULT '19:00',
+            trash_time TEXT DEFAULT '06:30',
             trash_message TEXT DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
             last_trash_notified_date TEXT,
             user_id TEXT,
@@ -299,7 +325,7 @@ export async function initDb(): Promise<void> {
             end_time TEXT DEFAULT '22:00',
             interval_minutes INTEGER DEFAULT 60,
             timezone TEXT DEFAULT 'Asia/Ho_Chi_Minh',
-            notification_message TEXT DEFAULT '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
+            notification_message TEXT DEFAULT 'Yêu ơi , chung ta cùng uống nước nè',
             paused_until TEXT,
             quiet_hours_enabled INTEGER DEFAULT 0,
             quiet_start_time TEXT DEFAULT '12:00',
@@ -354,36 +380,25 @@ export async function initDb(): Promise<void> {
       // 4. Ensure settings for hieu exist
       const hieuSettings = await dbGet('SELECT id FROM reminder_settings WHERE user_id = ?', [hieuId]);
       if (!hieuSettings) {
-        const s1 = await dbGet<any>('SELECT * FROM reminder_settings WHERE id = 1');
-        if (s1) {
-          await dbRun(`
-            INSERT INTO reminder_settings (
-              enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled,
-              trash_days, trash_mode, trash_interval_days, trash_start_date, trash_time,
-              trash_message, user_id, start_time, end_time, interval_minutes, timezone,
-              notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [
-            s1.enabled ? 1 : 0, s1.water_enabled ? 1 : 0, s1.event_enabled ? 1 : 0, s1.event_auto_delete ? 1 : 0,
-            s1.trash_enabled ? 1 : 0, s1.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
-            s1.trash_mode || 'days_of_month', s1.trash_interval_days || 1, s1.trash_start_date || '2026-01-01',
-            s1.trash_time || '19:00', s1.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
-            hieuId, s1.start_time || '08:00', s1.end_time || '22:00', s1.interval_minutes || 60,
-            s1.timezone || 'Asia/Ho_Chi_Minh', '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
-            s1.quiet_hours_enabled ? 1 : 0, s1.quiet_start_time || '12:00', s1.quiet_end_time || '13:30'
-          ]);
-        }
+        await dbRun(`
+          INSERT INTO reminder_settings (
+            enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled,
+            trash_days, trash_mode, trash_interval_days, trash_start_date, trash_time,
+            trash_message, user_id, start_time, end_time, interval_minutes, timezone,
+            notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          true, true, true, true, true,
+          '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+          'days_of_month', 1, '2026-01-01',
+          '06:30', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+          hieuId, '08:00', '22:00', 60,
+          'Asia/Ho_Chi_Minh', 'Yêu ơi , chung ta cùng uống nước nè',
+          false, '12:00', '13:30'
+        ]);
       }
-
-      // 5. Clean default template for guests / other users (id = 1)
-      await dbRun(`
-        UPDATE reminder_settings
-        SET notification_message = '💧 Bạn ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
-            user_id = NULL
-        WHERE id = 1
-      `);
-      console.log(`[Data Privacy] All legacy data successfully moved to private account 'hieu' (${hieuId}).`);
+      console.log(`[Data Privacy] Primary account 'hieu' ready (${hieuId}).`);
     }
 
     // Guarantee user 'huyen' exists
@@ -410,16 +425,27 @@ export async function initDb(): Promise<void> {
             trash_message, user_id, start_time, end_time, interval_minutes, timezone,
             notification_message, quiet_hours_enabled, quiet_start_time, quiet_end_time
           )
-          VALUES (
-            1, 1, 1, 1, 0,
-            '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', 'days_of_month', 1, '2026-01-01', '19:00',
-            '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
-            ?, '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh',
-            '💧 Huyền ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', 0, '12:00', '13:30'
-          )
-        `, [huyen.id]);
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          true, true, true, true, true,
+          '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', 'days_of_month', 1, '2026-01-01', '06:30',
+          '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+          huyen.id, '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh',
+          'Yêu ơi , chung ta cùng uống nước nè', false, '12:00', '13:30'
+        ]);
       }
+      console.log(`[Data Privacy] Account 'huyen' ready (${huyen.id}).`);
     }
+
+    // Update ALL existing settings rows to couple water message and odd-days 06:30 trash reminder
+    await dbRun(`
+      UPDATE reminder_settings
+      SET notification_message = 'Yêu ơi , chung ta cùng uống nước nè',
+          trash_enabled = ?,
+          trash_time = '06:30',
+          trash_days = '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+          trash_mode = 'days_of_month'
+    `, [true]);
   } catch (privErr) {
     console.warn('Private data migration error:', privErr);
   }

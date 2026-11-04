@@ -49,24 +49,24 @@ reminderSettingsRouter.get('/', async (req: Request, res: Response) => {
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
-            fallback.enabled ? 1 : 0,
-            fallback.water_enabled !== undefined ? (fallback.water_enabled ? 1 : 0) : 1,
-            fallback.event_enabled !== undefined ? (fallback.event_enabled ? 1 : 0) : 1,
-            fallback.event_auto_delete !== undefined ? (fallback.event_auto_delete ? 1 : 0) : 1,
-            fallback.trash_enabled !== undefined ? (fallback.trash_enabled ? 1 : 0) : 0,
+            fallback.enabled !== undefined ? Boolean(fallback.enabled) : true,
+            fallback.water_enabled !== undefined ? Boolean(fallback.water_enabled) : true,
+            fallback.event_enabled !== undefined ? Boolean(fallback.event_enabled) : true,
+            fallback.event_auto_delete !== undefined ? Boolean(fallback.event_auto_delete) : true,
+            fallback.trash_enabled !== undefined ? Boolean(fallback.trash_enabled) : true,
             fallback.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
             fallback.trash_mode || 'days_of_month',
             fallback.trash_interval_days || 1,
             fallback.trash_start_date || '2026-01-01',
-            fallback.trash_time || '19:00',
+            fallback.trash_time || '06:30',
             fallback.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
             req.userId,
             fallback.start_time || '08:00',
             fallback.end_time || '22:00',
             fallback.interval_minutes || 60,
             fallback.timezone || 'Asia/Ho_Chi_Minh',
-            fallback.notification_message || '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
-            fallback.quiet_hours_enabled ? 1 : 0,
+            fallback.notification_message || 'Yêu ơi , chung ta cùng uống nước nè',
+            fallback.quiet_hours_enabled !== undefined ? Boolean(fallback.quiet_hours_enabled) : false,
             fallback.quiet_start_time || '12:00',
             fallback.quiet_end_time || '13:30',
           ]);
@@ -89,13 +89,14 @@ reminderSettingsRouter.get('/', async (req: Request, res: Response) => {
       water_enabled: row.water_enabled !== undefined ? Boolean(row.water_enabled) : Boolean(row.enabled),
       event_enabled: row.event_enabled !== undefined ? Boolean(row.event_enabled) : true,
       event_auto_delete: row.event_auto_delete !== undefined ? Boolean(row.event_auto_delete) : true,
-      trash_enabled: row.trash_enabled !== undefined ? Boolean(row.trash_enabled) : false,
+      trash_enabled: row.trash_enabled !== undefined ? Boolean(row.trash_enabled) : true,
       trash_days: row.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
       trash_mode: row.trash_mode || 'days_of_month',
       trash_interval_days: Number(row.trash_interval_days) || 1,
       trash_start_date: row.trash_start_date || '2026-01-01',
-      trash_time: row.trash_time || '19:00',
+      trash_time: row.trash_time || '06:30',
       trash_message: row.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+      notification_message: row.notification_message || 'Yêu ơi , chung ta cùng uống nước nè',
       quiet_hours_enabled: Boolean(row.quiet_hours_enabled),
     });
   } catch (err) {
@@ -138,25 +139,25 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
       current = await dbGet<DbReminderSettings>('SELECT * FROM reminder_settings WHERE id = 1');
     }
 
-    const newEnabled = enabled !== undefined ? (enabled ? 1 : 0) : (current?.enabled ? 1 : 0);
-    const newWaterEnabled = water_enabled !== undefined ? (water_enabled ? 1 : 0) : (current?.water_enabled !== undefined ? (current.water_enabled ? 1 : 0) : newEnabled);
-    const newEventEnabled = event_enabled !== undefined ? (event_enabled ? 1 : 0) : (current?.event_enabled !== undefined ? (current.event_enabled ? 1 : 0) : 1);
-    const newEventAutoDelete = event_auto_delete !== undefined ? (event_auto_delete ? 1 : 0) : (current?.event_auto_delete !== undefined ? (current.event_auto_delete ? 1 : 0) : 1);
-    const newTrashEnabled = trash_enabled !== undefined ? (trash_enabled ? 1 : 0) : (current?.trash_enabled ? 1 : 0);
+    const newEnabled = enabled !== undefined ? Boolean(enabled) : (current ? Boolean(current.enabled) : true);
+    const newWaterEnabled = water_enabled !== undefined ? Boolean(water_enabled) : (current?.water_enabled !== undefined ? Boolean(current.water_enabled) : newEnabled);
+    const newEventEnabled = event_enabled !== undefined ? Boolean(event_enabled) : (current?.event_enabled !== undefined ? Boolean(current.event_enabled) : true);
+    const newEventAutoDelete = event_auto_delete !== undefined ? Boolean(event_auto_delete) : (current?.event_auto_delete !== undefined ? Boolean(current.event_auto_delete) : true);
+    const newTrashEnabled = trash_enabled !== undefined ? Boolean(trash_enabled) : (current?.trash_enabled !== undefined ? Boolean(current.trash_enabled) : true);
     const newTrashDays = String(trash_days || current?.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31');
     const newTrashMode = String(trash_mode || current?.trash_mode || 'days_of_month');
     const newTrashInterval = Number(trash_interval_days) || current?.trash_interval_days || 1;
     const newTrashStartDate = String(trash_start_date || current?.trash_start_date || '2026-01-01');
-    const newTrashTime = String(trash_time || current?.trash_time || '19:00');
+    const newTrashTime = String(trash_time || current?.trash_time || '06:30');
     const newTrashMessage = String(trash_message || current?.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.');
 
     const newStartTime = String(start_time || current?.start_time || '08:00');
     const newEndTime = String(end_time || current?.end_time || '22:00');
     const newInterval = Number(interval_minutes) || current?.interval_minutes || 60;
     const newTimezone = String(timezone || current?.timezone || 'Asia/Ho_Chi_Minh');
-    const newMsg = String(notification_message !== undefined ? notification_message : (current?.notification_message || '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.'));
+    const newMsg = String(notification_message !== undefined ? notification_message : (current?.notification_message || 'Yêu ơi , chung ta cùng uống nước nè'));
     const newPausedUntil = paused_until ? String(paused_until) : null;
-    const newQuietEnabled = quiet_hours_enabled !== undefined ? (quiet_hours_enabled ? 1 : 0) : (current?.quiet_hours_enabled ? 1 : 0);
+    const newQuietEnabled = quiet_hours_enabled !== undefined ? Boolean(quiet_hours_enabled) : (current ? Boolean(current.quiet_hours_enabled) : false);
     const newQuietStart = String(quiet_start_time || current?.quiet_start_time || '12:00');
     const newQuietEnd = String(quiet_end_time || current?.quiet_end_time || '13:30');
 
@@ -230,8 +231,9 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
       trash_mode: saved?.trash_mode || 'days_of_month',
       trash_interval_days: Number(saved?.trash_interval_days) || 1,
       trash_start_date: saved?.trash_start_date || '2026-01-01',
-      trash_time: saved?.trash_time || '19:00',
+      trash_time: saved?.trash_time || '06:30',
       trash_message: saved?.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
+      notification_message: saved?.notification_message || 'Yêu ơi , chung ta cùng uống nước nè',
       quiet_hours_enabled: Boolean(saved?.quiet_hours_enabled),
     });
   } catch (err) {

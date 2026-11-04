@@ -173,7 +173,7 @@ export async function evaluateAndSendReminder(): Promise<boolean> {
 
   const payload = {
     title: 'WaterMate - Đến giờ uống nước! 💧',
-    body: settings.notification_message || `💧 Đã tự động cộng +1 ngụm (${sipMl}ml)! Uống một ngụm nước nhé.`,
+    body: settings.notification_message || 'Yêu ơi , chung ta cùng uống nước nè',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     url: '/?refresh=1',
@@ -340,6 +340,8 @@ export async function evaluateTrashReminders(): Promise<void> {
     hour12: false,
   });
   const currentTimeStr = timeFormatter.format(now); // "HH:mm"
+  const [cH, cM] = currentTimeStr.split(':').map(Number);
+  const currentTotalMinutes = cH * 60 + cM;
 
   // Day of month in Asia/Ho_Chi_Minh: 1 to 31
   const dayOfMonth = Number(new Intl.DateTimeFormat('en-GB', {
@@ -353,9 +355,11 @@ export async function evaluateTrashReminders(): Promise<void> {
       continue;
     }
 
-    // Check time
-    const targetTime = s.trash_time || '19:00';
-    if (currentTimeStr < targetTime) {
+    // Check time: default 06:30
+    const [tH, tM] = (s.trash_time || '06:30').split(':').map(Number);
+    const targetMinutes = (isNaN(tH) ? 6 : tH) * 60 + (isNaN(tM) ? 30 : tM);
+
+    if (currentTotalMinutes < targetMinutes) {
       continue;
     }
 
@@ -402,8 +406,9 @@ export async function evaluateTrashReminders(): Promise<void> {
 
       await sendNotificationToAll(payload, 'event');
 
-      // Update last notified date
-      await dbRun('UPDATE reminder_settings SET last_trash_notified_date = ? WHERE id = ?', [todayStr, s.id]);
+      // Update last notified date for all active trash reminder rows to avoid duplicate notifications
+      await dbRun('UPDATE reminder_settings SET last_trash_notified_date = ? WHERE trash_enabled = TRUE OR trash_enabled = 1', [todayStr]);
+      break;
     }
   }
 }

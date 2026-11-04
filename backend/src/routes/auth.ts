@@ -60,17 +60,22 @@ authRouter.post('/register', async (req: Request, res: Response) => {
     await dbRun(`
       INSERT INTO reminder_settings (
         enabled, water_enabled, event_enabled, event_auto_delete, trash_enabled,
-        trash_days, trash_time, trash_message, user_id, start_time, end_time,
+        trash_days, trash_mode, trash_interval_days, trash_start_date, trash_time, trash_message, user_id, start_time, end_time,
         interval_minutes, timezone, notification_message, quiet_hours_enabled,
         quiet_start_time, quiet_end_time
       )
       VALUES (
-        1, 1, 1, 1, 0,
-        '1,3,5', '19:00', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
-        ?, '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh',
-        '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.', 0, '12:00', '13:30'
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?
       )
-    `, [userId]);
+    `, [
+      true, true, true, true, true,
+      '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', 'days_of_month', 1, '2026-01-01', '06:30', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.', userId, '08:00', '22:00',
+      60, 'Asia/Ho_Chi_Minh', 'Yêu ơi , chung ta cùng uống nước nè', false,
+      '12:00', '13:30'
+    ]);
 
     const token = createAuthToken(userId, cleanUsername);
 
@@ -204,11 +209,11 @@ authRouter.post('/sync', requireAuthMiddleware, async (req: Request, res: Respon
               interval_minutes = COALESCE(?, interval_minutes)
           WHERE user_id = ?
         `, [
-          settings.enabled !== undefined ? (settings.enabled ? 1 : 0) : null,
-          settings.water_enabled !== undefined ? (settings.water_enabled ? 1 : 0) : null,
-          settings.event_enabled !== undefined ? (settings.event_enabled ? 1 : 0) : null,
-          settings.event_auto_delete !== undefined ? (settings.event_auto_delete ? 1 : 0) : null,
-          settings.trash_enabled !== undefined ? (settings.trash_enabled ? 1 : 0) : null,
+          settings.enabled !== undefined ? Boolean(settings.enabled) : null,
+          settings.water_enabled !== undefined ? Boolean(settings.water_enabled) : null,
+          settings.event_enabled !== undefined ? Boolean(settings.event_enabled) : null,
+          settings.event_auto_delete !== undefined ? Boolean(settings.event_auto_delete) : null,
+          settings.trash_enabled !== undefined ? Boolean(settings.trash_enabled) : null,
           settings.trash_days,
           settings.trash_time,
           settings.trash_message,

@@ -577,14 +577,15 @@ function triggerCustomTest() {
 const formPrefs = ref<UserPreferences>({ ...props.preferences });
 const formSettings = ref<ReminderSettings>({
   ...props.settings,
+  notification_message: props.settings.notification_message || 'Yêu ơi , chung ta cùng uống nước nè',
   water_enabled: props.settings.water_enabled !== undefined ? props.settings.water_enabled : props.settings.enabled,
   event_enabled: props.settings.event_enabled !== undefined ? props.settings.event_enabled : true,
   event_auto_delete: props.settings.event_auto_delete !== undefined ? props.settings.event_auto_delete : true,
-  trash_enabled: props.settings.trash_enabled !== undefined ? props.settings.trash_enabled : false,
+  trash_enabled: props.settings.trash_enabled !== undefined ? props.settings.trash_enabled : true,
   trash_days: props.settings.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
   trash_mode: props.settings.trash_mode || 'days_of_month',
   trash_interval_days: props.settings.trash_interval_days || 1,
-  trash_time: props.settings.trash_time || '19:00',
+  trash_time: props.settings.trash_time || '06:30',
   trash_message: props.settings.trash_message || '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
 });
 

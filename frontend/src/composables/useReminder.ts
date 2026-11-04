@@ -5,15 +5,25 @@ const STORAGE_KEY = 'watermate_reminder_settings';
 
 const defaultSettings: ReminderSettings = {
   enabled: true,
+  water_enabled: true,
   start_time: '08:00',
   end_time: '22:00',
   interval_minutes: 60,
   timezone: 'Asia/Ho_Chi_Minh',
-  notification_message: '💧 Hiếu ơi, đến giờ uống nước rồi! Uống một ngụm nhé.',
+  notification_message: 'Yêu ơi , chung ta cùng uống nước nè',
   paused_until: null,
   quiet_hours_enabled: false,
   quiet_start_time: '12:00',
   quiet_end_time: '13:30',
+  event_enabled: true,
+  event_auto_delete: true,
+  trash_enabled: true,
+  trash_mode: 'days_of_month',
+  trash_interval_days: 1,
+  trash_start_date: '2026-01-01',
+  trash_days: '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+  trash_time: '06:30',
+  trash_message: '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
 };
 
 const settings = ref<ReminderSettings>({ ...defaultSettings });
