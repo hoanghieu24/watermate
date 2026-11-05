@@ -150,6 +150,7 @@ import { useWaterTracker } from './composables/useWaterTracker';
 import { useReminder } from './composables/useReminder';
 import type { UserPreferences, ReminderSettings, EventReminder, User } from './types';
 import * as api from './services/api';
+import { playNotificationSound } from './utils/sound';
 
 const {
   logs,
@@ -270,9 +271,11 @@ onMounted(async () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data?.type === 'PUSH_RECEIVED') {
+        playNotificationSound();
         showToast(event.data.body || '💧 Đến giờ uống nước rồi!', 'info');
         refreshBackendLogs();
       } else if (event.data?.type === 'EVENT_PUSH_RECEIVED') {
+        playNotificationSound();
         showToast(event.data.body || '📅 Bạn có nhắc nhở quan trọng!', 'info');
         refreshEventReminders();
       } else if (event.data?.type === 'OPEN_TAB' && event.data?.tab === 'events') {
@@ -518,6 +521,7 @@ async function handleTestPush() {
     showToast('Đang gửi thông báo thử nghiệm từ máy chủ...', 'info');
     const result = await api.sendTestNotification();
     if (result.success) {
+      playNotificationSound();
       await refreshBackendLogs();
       if (result.sent && result.sent > 0) {
         showToast('Đã gửi thông báo & tự động cộng +1 ngụm (+50ml)!', 'success');
@@ -542,6 +546,7 @@ async function handleTestTrash(customMessage?: string) {
     showToast('Đang gửi thông báo đổ rác thử nghiệm...', 'info');
     const result = await api.sendTestTrashNotification(customMessage);
     if (result.success) {
+      playNotificationSound();
       showToast('Đã gửi thông báo đổ rác thử nghiệm thành công!', 'success');
     } else {
       showToast(result.error || 'Lỗi gửi test thông báo đổ rác', 'error');
@@ -566,6 +571,7 @@ async function handleTestCustom(payload: { title?: string; message: string }) {
       showToast('Đang gửi thông báo test của bạn...', 'info');
       const result = await api.sendCustomTestNotification(customBody, customTitle);
       if (result.success) {
+        playNotificationSound();
         showToast(`Đã gửi thông báo: "${customBody}"`, 'success');
         return;
       }

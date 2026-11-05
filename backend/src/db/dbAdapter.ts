@@ -119,7 +119,7 @@ export async function initDb(): Promise<void> {
         event_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         event_auto_delete BOOLEAN NOT NULL DEFAULT TRUE,
         trash_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        trash_days VARCHAR(255) NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+        trash_days VARCHAR(255) NOT NULL DEFAULT '1,5,9,13,17,21,25,29',
         trash_mode VARCHAR(20) NOT NULL DEFAULT 'days_of_month',
         trash_interval_days INTEGER NOT NULL DEFAULT 1,
         trash_start_date VARCHAR(20) NOT NULL DEFAULT '2026-01-01',
@@ -183,7 +183,7 @@ export async function initDb(): Promise<void> {
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS event_auto_delete BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
     try { await pgPool.query('ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_enabled BOOLEAN NOT NULL DEFAULT TRUE;'); } catch {}
-    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_days VARCHAR(255) NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_days VARCHAR(255) NOT NULL DEFAULT '1,5,9,13,17,21,25,29';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_mode VARCHAR(20) NOT NULL DEFAULT 'days_of_month';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_interval_days INTEGER NOT NULL DEFAULT 1;"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ADD COLUMN IF NOT EXISTS trash_start_date VARCHAR(20) NOT NULL DEFAULT '2026-01-01';"); } catch {}
@@ -203,7 +203,7 @@ export async function initDb(): Promise<void> {
     try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN notification_message SET DEFAULT 'Yêu ơi , chung ta cùng uống nước nè';"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN trash_enabled SET DEFAULT TRUE;"); } catch {}
     try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN trash_time SET DEFAULT '06:30';"); } catch {}
-    try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN trash_days SET DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
+    try { await pgPool.query("ALTER TABLE reminder_settings ALTER COLUMN trash_days SET DEFAULT '1,5,9,13,17,21,25,29';"); } catch {}
 
     // 3. Create Indexes after columns exist
     try { await pgPool.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);'); } catch {}
@@ -302,7 +302,7 @@ export async function initDb(): Promise<void> {
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_mode TEXT NOT NULL DEFAULT 'days_of_month';"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_interval_days INTEGER NOT NULL DEFAULT 1;"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_start_date TEXT;"); } catch {}
-    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_days TEXT NOT NULL DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31';"); } catch {}
+    try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_days TEXT NOT NULL DEFAULT '1,5,9,13,17,21,25,29';"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_time TEXT NOT NULL DEFAULT '06:30';"); } catch {}
     try { sqliteDb.exec("ALTER TABLE reminder_settings ADD COLUMN trash_message TEXT NOT NULL DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.';"); } catch {}
     try { sqliteDb.exec('ALTER TABLE reminder_settings ADD COLUMN last_trash_notified_date TEXT;'); } catch {}
@@ -329,7 +329,7 @@ export async function initDb(): Promise<void> {
             trash_mode TEXT DEFAULT 'days_of_month',
             trash_interval_days INTEGER DEFAULT 1,
             trash_start_date TEXT,
-            trash_days TEXT DEFAULT '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+            trash_days TEXT DEFAULT '1,5,9,13,17,21,25,29',
             trash_time TEXT DEFAULT '06:30',
             trash_message TEXT DEFAULT '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
             last_trash_notified_date TEXT,
@@ -403,7 +403,7 @@ export async function initDb(): Promise<void> {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           true, true, true, true, true,
-          '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+          '1,5,9,13,17,21,25,29',
           'days_of_month', 1, '2026-01-01',
           '06:30', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
           hieuId, '08:00', '22:00', 60,
@@ -441,7 +441,7 @@ export async function initDb(): Promise<void> {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           true, true, true, true, true,
-          '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', 'days_of_month', 1, '2026-01-01', '06:30',
+          '1,5,9,13,17,21,25,29', 'days_of_month', 1, '2026-01-01', '06:30',
           '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
           huyen.id, '08:00', '22:00', 60, 'Asia/Ho_Chi_Minh',
           'Yêu ơi , chung ta cùng uống nước nè', false, '12:00', '13:30'
@@ -450,13 +450,13 @@ export async function initDb(): Promise<void> {
       console.log(`[Data Privacy] Account 'huyen' ready (${huyen.id}).`);
     }
 
-    // Update ALL existing settings rows to couple water message and odd-days 06:30 trash reminder
+    // Update ALL existing settings rows to couple water message and apartment schedule trash reminder
     await dbRun(`
       UPDATE reminder_settings
       SET notification_message = 'Yêu ơi , chung ta cùng uống nước nè',
           trash_enabled = ?,
           trash_time = '06:30',
-          trash_days = '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+          trash_days = '1,5,9,13,17,21,25,29',
           trash_mode = 'days_of_month'
     `, [true]);
   } catch (privErr) {

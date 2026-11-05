@@ -54,7 +54,7 @@ reminderSettingsRouter.get('/', async (req: Request, res: Response) => {
             fallback.event_enabled !== undefined ? Boolean(fallback.event_enabled) : true,
             fallback.event_auto_delete !== undefined ? Boolean(fallback.event_auto_delete) : true,
             fallback.trash_enabled !== undefined ? Boolean(fallback.trash_enabled) : true,
-            fallback.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+            fallback.trash_days || '1,5,9,13,17,21,25,29',
             fallback.trash_mode || 'days_of_month',
             fallback.trash_interval_days || 1,
             fallback.trash_start_date || '2026-01-01',
@@ -90,7 +90,7 @@ reminderSettingsRouter.get('/', async (req: Request, res: Response) => {
       event_enabled: row.event_enabled !== undefined ? Boolean(row.event_enabled) : true,
       event_auto_delete: row.event_auto_delete !== undefined ? Boolean(row.event_auto_delete) : true,
       trash_enabled: row.trash_enabled !== undefined ? Boolean(row.trash_enabled) : true,
-      trash_days: row.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+      trash_days: row.trash_days || '1,5,9,13,17,21,25,29',
       trash_mode: row.trash_mode || 'days_of_month',
       trash_interval_days: Number(row.trash_interval_days) || 1,
       trash_start_date: row.trash_start_date || '2026-01-01',
@@ -144,7 +144,7 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
     const newEventEnabled = event_enabled !== undefined ? Boolean(event_enabled) : (current?.event_enabled !== undefined ? Boolean(current.event_enabled) : true);
     const newEventAutoDelete = event_auto_delete !== undefined ? Boolean(event_auto_delete) : (current?.event_auto_delete !== undefined ? Boolean(current.event_auto_delete) : true);
     const newTrashEnabled = trash_enabled !== undefined ? Boolean(trash_enabled) : (current?.trash_enabled !== undefined ? Boolean(current.trash_enabled) : true);
-    const newTrashDays = String(trash_days || current?.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31');
+    const newTrashDays = String(trash_days || current?.trash_days || '1,5,9,13,17,21,25,29');
     const newTrashMode = String(trash_mode || current?.trash_mode || 'days_of_month');
     const newTrashInterval = Number(trash_interval_days) || current?.trash_interval_days || 1;
     const newTrashStartDate = String(trash_start_date || current?.trash_start_date || '2026-01-01');
@@ -227,7 +227,7 @@ reminderSettingsRouter.put('/', async (req: Request, res: Response) => {
       event_enabled: Boolean(saved?.event_enabled),
       event_auto_delete: Boolean(saved?.event_auto_delete),
       trash_enabled: Boolean(saved?.trash_enabled),
-      trash_days: saved?.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+      trash_days: saved?.trash_days || '1,5,9,13,17,21,25,29',
       trash_mode: saved?.trash_mode || 'days_of_month',
       trash_interval_days: Number(saved?.trash_interval_days) || 1,
       trash_start_date: saved?.trash_start_date || '2026-01-01',

@@ -10,6 +10,7 @@ import { reminderSettingsRouter } from './routes/reminderSettings.js';
 import { pushRouter } from './routes/push.js';
 import { eventRemindersRouter } from './routes/eventReminders.js';
 import { authRouter } from './routes/auth.js';
+import { cronRouter } from './routes/cron.js';
 import { optionalAuthMiddleware } from './middleware/auth.js';
 import { startReminderScheduler } from './scheduler/reminderScheduler.js';
 
@@ -38,6 +39,7 @@ app.use('/api/water-logs', waterLogsRouter);
 app.use('/api/reminder-settings', reminderSettingsRouter);
 app.use('/api/push', pushRouter);
 app.use('/api/event-reminders', eventRemindersRouter);
+app.use('/api/cron', cronRouter);
 
 // Disable caching for HTML and Service Worker so updates are immediate
 app.use((req, res, next) => {
@@ -71,13 +73,13 @@ async function startServer() {
     console.log(`💧 WaterMate Server running on http://localhost:${PORT}`);
     console.log(`📊 Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Aiven)' : 'SQLite'}`);
 
-    // Self-ping Render edge proxy every 10 minutes to stay awake 24/7 (does NOT send notification)
+    // Self-ping Render edge proxy every 8 minutes to stay awake 24/7
     const externalUrl = process.env.RENDER_EXTERNAL_URL || 'https://watermate.onrender.com';
     setInterval(() => {
-      fetch(`${externalUrl}/api/health`)
-        .then(() => console.log(`[Keep-Alive] Pinged ${externalUrl}/api/health (staying awake)`))
+      fetch(`${externalUrl}/api/cron/trigger`)
+        .then(() => console.log(`[Keep-Alive] Pinged ${externalUrl}/api/cron/trigger (staying awake)`))
         .catch(() => {});
-    }, 10 * 60 * 1000);
+    }, 8 * 60 * 1000);
   });
 }
 

@@ -21,7 +21,7 @@ const defaultSettings: ReminderSettings = {
   trash_mode: 'days_of_month',
   trash_interval_days: 1,
   trash_start_date: '2026-01-01',
-  trash_days: '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+  trash_days: '1,5,9,13,17,21,25,29',
   trash_time: '06:30',
   trash_message: '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.',
 };

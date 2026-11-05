@@ -42,6 +42,9 @@ self.addEventListener('push', (event) => {
     data: { url: data.url || '/' },
     tag: `watermate-${Date.now()}`,
     renotify: true,
+    silent: false,
+    vibrate: [300, 150, 300, 150, 300],
+    sound: '/sounds/notification.wav',
   };
 
   event.waitUntil(

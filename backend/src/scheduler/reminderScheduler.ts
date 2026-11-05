@@ -211,7 +211,7 @@ export async function evaluateEventReminders(): Promise<void> {
   if (isAutoDelete) {
     try {
       // Delete completed events
-      await dbRun('DELETE FROM event_reminders WHERE is_completed = TRUE OR is_completed = 1');
+      await dbRun('DELETE FROM event_reminders WHERE is_completed = TRUE');
       // Delete past events that are older than today and were already notified
       await dbRun('DELETE FROM event_reminders WHERE event_date < ? AND last_notified_date IS NOT NULL', [todayStr]);
     } catch (cleanupErr) {
@@ -240,7 +240,7 @@ export async function evaluateEventReminders(): Promise<void> {
     last_notified_date: string | null;
   }>(`
     SELECT * FROM event_reminders
-    WHERE (is_completed = FALSE OR is_completed = 0)
+    WHERE is_completed = FALSE
       AND (last_notified_date IS NULL OR last_notified_date != ?)
   `, [todayStr]);
 
@@ -313,7 +313,7 @@ export async function evaluateEventReminders(): Promise<void> {
 export async function evaluateTrashReminders(): Promise<void> {
   const activeSettings = await dbQuery<ReminderSettingsRow>(`
     SELECT * FROM reminder_settings
-    WHERE trash_enabled = TRUE OR trash_enabled = 1
+    WHERE trash_enabled = TRUE
   `);
 
   if (!activeSettings || activeSettings.length === 0) {
@@ -383,7 +383,8 @@ export async function evaluateTrashReminders(): Promise<void> {
       }
     } else {
       // Days of month mode: check if today's day of month is in trash_days (1-31)
-      const configuredDays = (s.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31')
+      // Default apartment schedule: 1, 5, 9, 13, 17, 21, 25, 29
+      const configuredDays = (s.trash_days || '1,5,9,13,17,21,25,29')
         .split(',')
         .map((item) => Number(item.trim()))
         .filter((n) => !isNaN(n));
@@ -407,7 +408,7 @@ export async function evaluateTrashReminders(): Promise<void> {
       await sendNotificationToAll(payload, 'event');
 
       // Update last notified date for all active trash reminder rows to avoid duplicate notifications
-      await dbRun('UPDATE reminder_settings SET last_trash_notified_date = ? WHERE trash_enabled = TRUE OR trash_enabled = 1', [todayStr]);
+      await dbRun('UPDATE reminder_settings SET last_trash_notified_date = ? WHERE trash_enabled = TRUE', [todayStr]);
       break;
     }
   }

@@ -72,7 +72,7 @@ authRouter.post('/register', async (req: Request, res: Response) => {
       )
     `, [
       true, true, true, true, true,
-      '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31', 'days_of_month', 1, '2026-01-01', '06:30', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.', userId, '08:00', '22:00',
+      '1,5,9,13,17,21,25,29', 'days_of_month', 1, '2026-01-01', '06:30', '🗑️ Đến giờ đổ rác rồi! Gom rác mang đi đổ để nhà sạch sẽ nhé.', userId, '08:00', '22:00',
       60, 'Asia/Ho_Chi_Minh', 'Yêu ơi , chung ta cùng uống nước nè', false,
       '12:00', '13:30'
     ]);

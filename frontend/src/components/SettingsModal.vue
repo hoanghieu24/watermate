@@ -317,6 +317,20 @@
               <!-- Quick Presets -->
               <div>
                 <label class="block text-[10px] font-bold text-slate-600 mb-1.5">Chọn nhanh lịch nhắc theo ngày:</label>
+                
+                <!-- Building Schedule (01-05-09-13-17-21-25-29) -->
+                <div class="mb-1.5">
+                  <button
+                    type="button"
+                    @click="applyTrashPreset('apartment')"
+                    class="w-full py-2 px-2.5 rounded-xl text-[11px] font-black border transition-all text-center flex items-center justify-center gap-1.5 shadow-sm"
+                    :class="trashPreset === 'apartment' ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-300' : 'bg-emerald-50/80 text-emerald-800 border-emerald-200 hover:bg-emerald-100'"
+                  >
+                    <span>🏢</span>
+                    <span>Lịch chung cư (Sáng các ngày 1, 5, 9, 13, 17, 21, 25, 29)</span>
+                  </button>
+                </div>
+
                 <div class="grid grid-cols-3 gap-1.5 mb-1.5">
                   <button
                     type="button"
@@ -582,7 +596,7 @@ const formSettings = ref<ReminderSettings>({
   event_enabled: props.settings.event_enabled !== undefined ? props.settings.event_enabled : true,
   event_auto_delete: props.settings.event_auto_delete !== undefined ? props.settings.event_auto_delete : true,
   trash_enabled: props.settings.trash_enabled !== undefined ? props.settings.trash_enabled : true,
-  trash_days: props.settings.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31',
+  trash_days: props.settings.trash_days || '1,5,9,13,17,21,25,29',
   trash_mode: props.settings.trash_mode || 'days_of_month',
   trash_interval_days: props.settings.trash_interval_days || 1,
   trash_time: props.settings.trash_time || '06:30',
@@ -591,16 +605,19 @@ const formSettings = ref<ReminderSettings>({
 
 // Selected trash days helper (days of month 1 to 31)
 const selectedTrashDays = ref<number[]>(
-  (formSettings.value.trash_days || '1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31')
+  (formSettings.value.trash_days || '1,5,9,13,17,21,25,29')
     .split(',')
     .map(Number)
     .filter((n) => !isNaN(n) && n >= 1 && n <= 31)
 );
 
-const trashPreset = ref<'every_day' | 'every_2_days' | 'every_3_days' | 'even' | 'odd' | 'custom'>('custom');
+const trashPreset = ref<'every_day' | 'every_2_days' | 'every_3_days' | 'even' | 'odd' | 'apartment' | 'custom'>('custom');
 
 // Detect initial preset
-if (selectedTrashDays.value.length === 31) {
+const apartmentDays = [1, 5, 9, 13, 17, 21, 25, 29];
+if (selectedTrashDays.value.length === 8 && apartmentDays.every((d) => selectedTrashDays.value.includes(d))) {
+  trashPreset.value = 'apartment';
+} else if (selectedTrashDays.value.length === 31) {
   trashPreset.value = 'every_day';
 } else if (selectedTrashDays.value.length === 15 && selectedTrashDays.value.every(d => d % 2 === 0)) {
   trashPreset.value = 'even';
@@ -608,9 +625,12 @@ if (selectedTrashDays.value.length === 31) {
   trashPreset.value = 'odd';
 }
 
-function applyTrashPreset(preset: 'every_day' | 'every_2_days' | 'every_3_days' | 'even' | 'odd') {
+function applyTrashPreset(preset: 'every_day' | 'every_2_days' | 'every_3_days' | 'even' | 'odd' | 'apartment') {
   trashPreset.value = preset;
-  if (preset === 'every_day') {
+  if (preset === 'apartment') {
+    selectedTrashDays.value = [1, 5, 9, 13, 17, 21, 25, 29];
+    formSettings.value.trash_mode = 'days_of_month';
+  } else if (preset === 'every_day') {
     selectedTrashDays.value = Array.from({ length: 31 }, (_, i) => i + 1);
     formSettings.value.trash_mode = 'interval';
     formSettings.value.trash_interval_days = 1;
@@ -646,6 +666,10 @@ function toggleTrashDay(dayVal: number) {
 }
 
 const trashDaysSummaryText = computed(() => {
+  const aptDays = [1, 5, 9, 13, 17, 21, 25, 29];
+  if (selectedTrashDays.value.length === 8 && aptDays.every((d) => selectedTrashDays.value.includes(d))) {
+    return '🔔 Sẽ nhắc đúng lịch chung cư: Sáng các ngày 1, 5, 9, 13, 17, 21, 25, 29.';
+  }
   if (selectedTrashDays.value.length === 31) return '🔔 Sẽ nhắc đổ rác hằng ngày.';
   if (selectedTrashDays.value.length === 15 && selectedTrashDays.value.every(d => d % 2 === 0)) return '🔔 Sẽ nhắc vào các ngày chẵn trong tháng.';
   if (selectedTrashDays.value.length === 16 && selectedTrashDays.value.every(d => d % 2 === 1)) return '🔔 Sẽ nhắc vào các ngày lẻ trong tháng.';
